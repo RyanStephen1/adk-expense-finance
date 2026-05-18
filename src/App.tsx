@@ -2898,6 +2898,14 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
   };
 
   const downloadFile = async (filePath: string, name: string) => {
+    // Detect mobile browser to preemptively bypass popup blocker policies
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let newWindow: Window | null = null;
+    
+    if (isMobile) {
+      newWindow = window.open('about:blank', '_blank');
+    }
+
     try {
       const { data, error } = await supabase.storage
         .from('cash-reports')
@@ -2907,13 +2915,19 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
         throw error;
       }
 
-      const link = document.createElement('a');
-      link.href = data.signedUrl;
-      link.download = name;
-      link.target = '_blank';
-      link.click();
+      if (isMobile && newWindow) {
+        // Redirect the synchronously opened window to the signed secure URL
+        newWindow.location.href = data.signedUrl;
+      } else {
+        const link = document.createElement('a');
+        link.href = data.signedUrl;
+        link.download = name;
+        link.target = '_blank';
+        link.click();
+      }
     } catch (err: any) {
       console.error("Download failed", err);
+      if (newWindow) newWindow.close();
       alert(`Download failed: ${err.message}`);
     }
   };
@@ -3174,11 +3188,16 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = previewFile.url;
-                      link.download = previewFile.name;
-                      link.target = '_blank';
-                      link.click();
+                      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                      if (isMobile) {
+                        window.open(previewFile.url, '_blank');
+                      } else {
+                        const link = document.createElement('a');
+                        link.href = previewFile.url;
+                        link.download = previewFile.name;
+                        link.target = '_blank';
+                        link.click();
+                      }
                     }}
                     className="px-2.5 py-1.5 bg-black text-white hover:bg-zinc-800 transition-all font-black uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5"
                   >
@@ -3196,13 +3215,32 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
               </div>
 
               {/* Body Content */}
-              <div className="flex-1 bg-zinc-100 p-2 overflow-auto flex items-center justify-center relative">
+              <div className="flex-1 bg-zinc-100 p-4 md:p-6 overflow-auto flex items-center justify-center relative">
                 {previewFile.type === 'pdf' ? (
-                  <iframe
-                    src={`${previewFile.url}#toolbar=0&navpanes=0`}
-                    className="w-full h-full border-none bg-white"
-                    title="PDF Preview"
-                  />
+                  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? (
+                    <div className="flex flex-col items-center justify-center p-6 text-center bg-white border-2 border-black brutalist-shadow max-w-sm">
+                      <div className="p-4 bg-[#EFF6FF] text-[#2563EB] mb-4 border-2 border-black">
+                        <FileText className="w-12 h-12" />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Mobile PDF Support</span>
+                      <h4 className="text-sm font-black uppercase mt-1">Mobile PDF Viewer</h4>
+                      <p className="text-xs opacity-60 mt-2 uppercase font-bold tracking-wider leading-relaxed">
+                        Mobile browsers do not support embedded PDF previews. Click the button below to safely open and view your secure report.
+                      </p>
+                      <button
+                        onClick={() => window.open(previewFile.url, '_blank')}
+                        className="mt-6 w-full py-3 bg-black text-white hover:bg-zinc-800 transition-all font-black uppercase tracking-widest text-[9px] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                      >
+                        Open PDF in New Tab
+                      </button>
+                    </div>
+                  ) : (
+                    <iframe
+                      src={`${previewFile.url}#toolbar=0&navpanes=0`}
+                      className="w-full h-full border-none bg-white"
+                      title="PDF Preview"
+                    />
+                  )
                 ) : (
                   <img
                     src={previewFile.url}
