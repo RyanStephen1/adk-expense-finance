@@ -2765,7 +2765,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string; filePath: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const isAdmin = useMemo(() => {
@@ -2887,7 +2887,8 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
       setPreviewFile({
         url: data.signedUrl,
         name: name,
-        type: isPdf ? 'pdf' : 'image'
+        type: isPdf ? 'pdf' : 'image',
+        filePath: filePath
       });
     } catch (err: any) {
       console.error("Preview signature failed", err);
@@ -2909,7 +2910,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
     try {
       const { data, error } = await supabase.storage
         .from('cash-reports')
-        .createSignedUrl(filePath, 60);
+        .createSignedUrl(filePath, 60, { download: name });
 
       if (error) {
         throw error;
@@ -3187,18 +3188,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => {
-                      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                      if (isMobile) {
-                        window.open(previewFile.url, '_blank');
-                      } else {
-                        const link = document.createElement('a');
-                        link.href = previewFile.url;
-                        link.download = previewFile.name;
-                        link.target = '_blank';
-                        link.click();
-                      }
-                    }}
+                    onClick={() => downloadFile(previewFile.filePath, previewFile.name)}
                     className="px-2.5 py-1.5 bg-black text-white hover:bg-zinc-800 transition-all font-black uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5"
                   >
                     <Download className="w-3.5 h-3.5" />
