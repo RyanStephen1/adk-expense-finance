@@ -58,3 +58,20 @@ export interface DatabaseErrorInfo {
   path: string | null;
   authInfo: any;
 }
+
+export type BankTransactionType = 'DEPOSIT' | 'PAYMENT_TO_BE_MADE' | 'WITHDRAWAL' | 'KOREA_PAYMENT';
+export type BankTransactionStatus = 'CLEARED' | 'PENDING' | 'BOUNCED';
+
+export interface BankTransaction {
+  id: string;
+  date: string;
+  type: BankTransactionType;
+  particulars: string;
+  refNo: string;
+  bankName: string;
+  amount: number;
+  status: BankTransactionStatus;
+  remarks: string;
+  createdAt: string;
+  createdBy: string;
+}

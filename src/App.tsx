@@ -19,9 +19,11 @@ import {
   LogOut,
   LogIn,
   TrendingUp,
+  TrendingDown,
   Wallet,
   Banknote,
   Edit2,
+  Edit,
   ChevronRight,
   ChevronDown,
   FileText,
@@ -34,7 +36,13 @@ import {
   HardDrive,
   FolderOpen,
   File,
-  Eye
+  Eye,
+  Folder,
+  Receipt,
+  DollarSign,
+  Search,
+  Camera,
+  PlusCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -64,7 +72,10 @@ import {
   DatabaseErrorInfo,
   DailyReviewRecord,
   AppUser,
-  UserRole
+  UserRole,
+  BankTransaction,
+  BankTransactionType,
+  BankTransactionStatus
 } from './types';
 import { User } from '@supabase/supabase-js';
 
@@ -81,6 +92,35 @@ const handleDatabaseError = (error: any, operationType: OperationType, path: str
   alert(`Database Error during ${operationType} on ${path}:\n\n${errorMessage}`);
   throw new Error(JSON.stringify(errInfo));
 };
+
+const isMissingTableError = (error: any, tableName: string) => {
+  const message = String(error?.message || error || '').toLowerCase();
+  const code = String(error?.code || '').toUpperCase();
+  const table = tableName.toLowerCase();
+
+  return message.includes(table) && (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    message.includes('schema cache') ||
+    message.includes('could not find the table') ||
+    message.includes('does not exist')
+  );
+};
+
+const missingBankTableMessage =
+  'Bank Transactions is not set up in Supabase yet. Create the bank_transactions table using SUPABASE_BANK_SETUP.md, then refresh the app.';
+
+const formatBankTransactionType = (type: BankTransactionType) => {
+  if (type === 'PAYMENT_TO_BE_MADE') return 'PAYMENT TO BE MADE';
+  if (type === 'KOREA_PAYMENT') return 'KOREA PAYMENT';
+  return type;
+};
+
+const isOutgoingBankTransaction = (type: BankTransactionType) =>
+  type === 'PAYMENT_TO_BE_MADE' || type === 'WITHDRAWAL' || type === 'KOREA_PAYMENT';
+
+const isPaymentToBeMadeType = (type: BankTransactionType) =>
+  type === 'PAYMENT_TO_BE_MADE' || type === 'KOREA_PAYMENT';
 
 
 export default function App() {
@@ -103,7 +143,25 @@ export default function App() {
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [activeTab, setActiveTab] = useState<'REGISTRY' | 'REVIEW' | 'DRIVE' | 'ADMIN'>('REGISTRY');
+  const [activeTab, setActiveTab] = useState<'REGISTRY' | 'BANK' | 'REVIEW' | 'DRIVE' | 'ADMIN'>('REGISTRY');
+  const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
+  const [selectedBankIds, setSelectedBankIds] = useState<string[]>([]);
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [isBankDeleteModalOpen, setIsBankDeleteModalOpen] = useState(false);
+  const [bankTransactionToDelete, setBankTransactionToDelete] = useState<string | null>(null);
+  const [editingBankTransaction, setEditingBankTransaction] = useState<BankTransaction | null>(null);
+
+  // Bank filters
+  const [bankFilter, setBankFilter] = useState<string>('ALL');
+  const [bankTypeFilter, setBankTypeFilter] = useState<'ALL' | BankTransactionType>('ALL');
+  const [bankStatusFilter, setBankStatusFilter] = useState<'ALL' | 'CLEARED' | 'PENDING' | 'BOUNCED'>('ALL');
+  const [bankSearchTerm, setBankSearchTerm] = useState<string>('');
+  const [bankDateStart, setBankDateStart] = useState<string>('');
+  const [bankDateEnd, setBankDateEnd] = useState<string>('');
+
+  const isAdmin = useMemo(() => {
+    return userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com';
+  }, [userProfile, user]);
   const [reviewRecords, setReviewRecords] = useState<DailyReviewRecord[]>([]);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [editingReview, setEditingReview] = useState<DailyReviewRecord | null>(null);
@@ -111,6 +169,7 @@ export default function App() {
   const [isDeleteReviewModalOpen, setIsDeleteReviewModalOpen] = useState(false);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [vouchers, setVouchers] = useState<any[]>([]);
 
   // Declared database fetchers as reusable useCallback hooks
   const fetchExpenses = useCallback(async () => {
@@ -234,6 +293,53 @@ export default function App() {
       }
     } else if (data) {
       setReports(data);
+    }
+  }, [user]);
+
+  const fetchVouchers = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('vouchers')
+      .select('*, uploader:users!uploaded_by(displayName)')
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      console.warn("Vouchers join failed, using flat select fallback:", error.message);
+      const { data: flatData, error: flatError } = await supabase
+        .from('vouchers')
+        .select('*')
+        .order('uploaded_at', { ascending: false });
+
+      if (flatError) {
+        console.error("Failed to fetch vouchers:", flatError);
+      } else if (flatData) {
+        setVouchers(flatData);
+      }
+    } else if (data) {
+      setVouchers(data);
+    }
+  }, [user]);
+  const fetchBankTransactions = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('bank_transactions')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('createdAt', { ascending: false });
+
+      if (error) {
+        console.warn("Table bank_transactions error:", error.message);
+        if (isMissingTableError(error, 'bank_transactions')) {
+          setBankTransactions([]);
+        } else {
+          handleDatabaseError(error, OperationType.LIST, 'bank_transactions');
+        }
+      } else if (data) {
+        setBankTransactions(data as BankTransaction[]);
+      }
+    } catch (e: any) {
+      console.error("Error fetching bank transactions", e);
     }
   }, [user]);
 
@@ -369,6 +475,12 @@ export default function App() {
     setEditingReview(null);
   }, [fetchReviews]);
 
+  const closeBankModal = useCallback(() => {
+    fetchBankTransactions();
+    setIsBankModalOpen(false);
+    setEditingBankTransaction(null);
+  }, [fetchBankTransactions]);
+
   // Database Listeners
   useEffect(() => {
     if (!user) return;
@@ -429,10 +541,37 @@ export default function App() {
     return () => { supabase.removeChannel(sub); };
   }, [user, fetchReports]);
 
-  // Reset selected expenses on active date or tab change to prevent accidental deletes
+  // Vouchers Listener
+  useEffect(() => {
+    if (!user) return;
+
+    fetchVouchers();
+
+    const sub = supabase.channel('vouchers-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vouchers' }, fetchVouchers)
+      .subscribe();
+
+    return () => { supabase.removeChannel(sub); };
+  }, [user, fetchVouchers]);
+
+  // Bank Transactions Listener
+  useEffect(() => {
+    if (!user) return;
+
+    fetchBankTransactions();
+
+    const sub = supabase.channel('bank-transactions-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bank_transactions' }, fetchBankTransactions)
+      .subscribe();
+
+    return () => { supabase.removeChannel(sub); };
+  }, [user, fetchBankTransactions]);
+
+  // Reset selected expenses/bank logs on active date or tab change to prevent accidental deletes
   useEffect(() => {
     setSelectedExpenseIds([]);
-  }, [selectedDate.toDateString(), activeTab]);
+    setSelectedBankIds([]);
+  }, [selectedDate.toDateString(), activeTab, bankFilter, bankTypeFilter, bankStatusFilter, bankSearchTerm]);
 
 
 
@@ -467,9 +606,58 @@ export default function App() {
     expenses.reduce((sum, exp) => sum + exp.amount, 0),
     [expenses]);
 
+  const filteredBankTransactions = useMemo(() => {
+    return bankTransactions.filter(tx => {
+      if (bankFilter !== 'ALL' && tx.bankName !== bankFilter) return false;
+      if (bankTypeFilter !== 'ALL' && tx.type !== bankTypeFilter) return false;
+      if (bankStatusFilter !== 'ALL' && tx.status !== bankStatusFilter) return false;
+      if (bankDateStart && tx.date < bankDateStart) return false;
+      if (bankDateEnd && tx.date > bankDateEnd) return false;
+      if (bankSearchTerm.trim()) {
+        const query = bankSearchTerm.toLowerCase();
+        const particularsMatch = tx.particulars?.toLowerCase().includes(query);
+        const refNoMatch = tx.refNo?.toLowerCase().includes(query);
+        const remarksMatch = tx.remarks?.toLowerCase().includes(query);
+        const amountMatch = String(tx.amount).includes(query);
+        if (!particularsMatch && !refNoMatch && !remarksMatch && !amountMatch) return false;
+      }
+      return true;
+    });
+  }, [bankTransactions, bankFilter, bankTypeFilter, bankStatusFilter, bankSearchTerm, bankDateStart, bankDateEnd]);
+
   const extraCash = summary.withdrawalAmount - totalPayables;
   const bankBalanceAfterWithdrawal = summary.bankBalance - summary.withdrawalAmount;
   const finalBalanceAfterExpenses = summary.cashOnHand + extraCash;
+
+  const handleUpdateBankBalance = async (nextBalance: number) => {
+    if (!isAdmin) {
+      alert("Unauthorized: Only admins can update bank balance.");
+      return;
+    }
+
+    const summaryId = summary.id || selectedDate.toISOString().split('T')[0];
+    const nextSummary = {
+      ...summary,
+      id: summaryId,
+      bankBalance: nextBalance,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const { error } = await supabase.from('summaries').upsert([{
+        id: summaryId,
+        withdrawalAmount: summary.withdrawalAmount || 0,
+        bankBalance: nextBalance,
+        cashOnHand: summary.cashOnHand || 0,
+        updatedAt: nextSummary.updatedAt,
+      }]);
+
+      if (error) throw error;
+      setSummary(nextSummary);
+    } catch (error) {
+      handleDatabaseError(error, OperationType.WRITE, `summaries/${summaryId}`);
+    }
+  };
 
   const handleExportPDF = () => {
     const doc = new jsPDF({
@@ -852,6 +1040,22 @@ export default function App() {
     }
   }
 
+  async function handleDeleteBankTransaction() {
+    if (!bankTransactionToDelete) return;
+    try {
+      const { error } = await supabase.from('bank_transactions').delete().eq('id', bankTransactionToDelete);
+      if (error) throw error;
+      setIsBankDeleteModalOpen(false);
+      setBankTransactionToDelete(null);
+    } catch (error) {
+      if (isMissingTableError(error, 'bank_transactions')) {
+        alert(missingBankTableMessage);
+        return;
+      }
+      handleDatabaseError(error, OperationType.DELETE, `bank_transactions/${bankTransactionToDelete}`);
+    }
+  }
+
   async function handleConfirmAndRollForward() {
     try {
       const netBank = bankBalanceAfterWithdrawal;
@@ -1024,6 +1228,285 @@ export default function App() {
     }
   }
 
+  async function handleBulkDeleteBankTransactions() {
+    if (selectedBankIds.length === 0) return;
+
+    if (!isAdmin) {
+      alert("Unauthorized: Only admins can delete records.");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Are you sure you want to delete the ${selectedBankIds.length} selected bank transaction(s)?`
+    );
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('bank_transactions')
+        .delete()
+        .in('id', selectedBankIds);
+
+      if (error) throw error;
+
+      setSelectedBankIds([]);
+      alert("Successfully deleted selected bank transaction(s)!");
+    } catch (error: any) {
+      if (isMissingTableError(error, 'bank_transactions')) {
+        alert(missingBankTableMessage);
+        return;
+      }
+      console.error("Failed to delete selected bank transactions:", error);
+      alert("Failed to delete selected bank transactions. Please check your network connection.");
+    }
+  }
+
+  const handleExportBankPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    // Elegant Corporate A4 Header
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 0, 210, 42, 'F');
+    
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 3, 'F');
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.35);
+    doc.line(0, 42, 210, 42);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ADK CO., LTD', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text('BANK TRANSACTIONS REGISTRY & AUDIT STATEMENT', 14, 25);
+
+    let filterDescription = `BANK: ${bankFilter}`;
+    if (bankDateStart || bankDateEnd) {
+      filterDescription += ` | RANGE: ${bankDateStart || 'EARLIEST'} to ${bankDateEnd || 'LATEST'}`;
+    } else {
+      filterDescription += ` | ALL-TIME`;
+    }
+    if (bankTypeFilter !== 'ALL') filterDescription += ` | TYPE: ${formatBankTransactionType(bankTypeFilter)}`;
+    if (bankStatusFilter !== 'ALL') filterDescription += ` | STATUS: ${bankStatusFilter}`;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(filterDescription.toUpperCase(), 14, 32);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`GENERATED ON: ${dateStr.toUpperCase()} at ${new Date().toLocaleTimeString()}`, 14, 37);
+
+    const totalIncoming = filteredBankTransactions
+      .filter(tx => tx.type === 'DEPOSIT')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+    const totalPaymentsToBeMade = filteredBankTransactions
+      .filter(tx => isPaymentToBeMadeType(tx.type))
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+    const totalWithdrawals = filteredBankTransactions
+      .filter(tx => tx.type === 'WITHDRAWAL')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+    const netBankFlow = totalIncoming - totalPaymentsToBeMade - totalWithdrawals;
+    const currentBookBalance = summary.bankBalance + netBankFlow;
+
+    const pendingClearance = filteredBankTransactions
+      .filter(tx => tx.status === 'PENDING')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+    // KPI CARDS
+    doc.setFillColor(255, 251, 235);
+    doc.rect(14, 46, 42, 20, 'F');
+    doc.setDrawColor(253, 230, 138);
+    doc.setLineWidth(0.35);
+    doc.rect(14, 46, 42, 20);
+    doc.setTextColor(180, 83, 9);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAYMENTS TO MAKE', 17, 51.5);
+    doc.setTextColor(120, 53, 4);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(totalPaymentsToBeMade), 17, 60.5);
+
+    doc.setFillColor(254, 242, 242);
+    doc.rect(60, 46, 42, 20, 'F');
+    doc.setDrawColor(254, 202, 202);
+    doc.rect(60, 46, 42, 20);
+    doc.setTextColor(185, 28, 28);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('WITHDRAWALS', 63, 51.5);
+    doc.setTextColor(153, 27, 27);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(totalWithdrawals), 63, 60.5);
+
+    doc.setFillColor(239, 246, 255);
+    doc.rect(106, 46, 42, 20, 'F');
+    doc.setDrawColor(191, 219, 254);
+    doc.rect(106, 46, 42, 20);
+    doc.setTextColor(29, 78, 216);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CURRENT BALANCE', 109, 51.5);
+    doc.setTextColor(30, 58, 138);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(currentBookBalance), 109, 60.5);
+
+    doc.setFillColor(255, 251, 235);
+    doc.rect(152, 46, 44, 20, 'F');
+    doc.setDrawColor(253, 230, 138);
+    doc.rect(152, 46, 44, 20);
+    doc.setTextColor(180, 83, 9);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PENDING CLEARANCE', 155, 51.5);
+    doc.setTextColor(120, 53, 4);
+    doc.setFontSize(11);
+    doc.text(formatCurrency(pendingClearance), 155, 60.5);
+
+    const tableHeaders = [['NO.', 'DATE', 'BANK', 'TYPE', 'PARTICULARS (REF NO.)', 'AMOUNT', 'STATUS', 'REMARKS']];
+    const tableBody = filteredBankTransactions.map((tx, index) => [
+      index + 1,
+      tx.date,
+      tx.bankName,
+      formatBankTransactionType(tx.type),
+      `${tx.refNo || '-'}\n${tx.particulars}`,
+      formatCurrency(tx.amount),
+      tx.status,
+      tx.remarks || '-'
+    ]);
+
+    autoTable(doc, {
+      startY: 72,
+      head: tableHeaders,
+      body: tableBody,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 7.5, fontStyle: 'bold' },
+      columnStyles: {
+        3: { fontStyle: 'bold' },
+        5: { fontStyle: 'bold', halign: 'right' }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3) {
+          const val = String(data.cell.raw);
+          if (val === 'DEPOSIT') {
+            data.cell.styles.textColor = [16, 185, 129];
+          } else if (val === 'PAYMENT TO BE MADE' || val === 'WITHDRAWAL' || val === 'KOREA PAYMENT') {
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+        }
+        if (data.section === 'body' && data.column.index === 6) {
+          const val = String(data.cell.raw);
+          if (val === 'CLEARED') {
+            data.cell.styles.textColor = [16, 185, 129];
+          } else if (val === 'PENDING') {
+            data.cell.styles.textColor = [245, 158, 11];
+          } else if (val === 'BOUNCED') {
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+        }
+      }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 80;
+    const pageHeight = doc.internal.pageSize.height;
+    let signaturePage = doc.getNumberOfPages();
+    
+    if (finalY + 40 > pageHeight) {
+      doc.addPage();
+      signaturePage = doc.getNumberOfPages();
+      doc.setPage(signaturePage);
+    } else {
+      doc.setPage(signaturePage);
+    }
+
+    const sigY = Math.max(finalY + 12, pageHeight - 48);
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.25);
+    doc.line(14, sigY + 12, 84, sigY + 12);
+    
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PREPARED BY', 14, sigY + 17);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Financial Officer', 14, sigY + 21);
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.25);
+    doc.line(110, sigY + 12, 180, sigY + 12);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BOSS SEKON KIM', 110, sigY + 17);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Managing Director / CEO', 110, sigY + 21);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`System Generated on ${new Date().toLocaleString()}`, 14, pageHeight - 8);
+    doc.text(`Page ${signaturePage} of ${signaturePage}`, 180, pageHeight - 8);
+
+    doc.save(`ADK-BankRegistry-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const handleExportBankPNG = async () => {
+    const element = document.getElementById('bank-registry-report-view');
+    if (!element) return;
+
+    const originalStyle = element.style.cssText;
+
+    try {
+      element.style.position = 'fixed';
+      element.style.left = '0';
+      element.style.top = '0';
+      element.style.zIndex = '99999';
+      element.style.visibility = 'visible';
+      element.style.display = 'block';
+      element.style.opacity = '1';
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const dataUrl = await htmlToImage.toPng(element, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+
+      const link = document.createElement('a');
+      link.download = `ADK-BankRegistry-${new Date().toISOString().split('T')[0]}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('PNG Export failed', error);
+      alert('PNG Export failed. Please try PDF export instead.');
+    } finally {
+      element.style.cssText = originalStyle;
+    }
+  };
+
   if (user && !userProfile) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#F9FAFB]">
@@ -1077,6 +1560,20 @@ export default function App() {
                   )}
                 >
                   Registry
+                </button>
+              )}
+
+              {/* Bank Registry Tab - ADMIN or REVIEWER Only */}
+              {(userProfile?.role === 'ADMIN' || userProfile?.role === 'REVIEWER' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') && (
+                <button
+                  onClick={() => setActiveTab('BANK')}
+                  className={cn(
+                    "px-3 md:px-4 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1",
+                    activeTab === 'BANK' ? "bg-black text-white" : "text-black hover:bg-white"
+                  )}
+                >
+                  <Banknote className="w-3.5 h-3.5" />
+                  Bank Registry
                 </button>
               )}
 
@@ -1533,12 +2030,65 @@ export default function App() {
               </div>
             </div>
           </>
+        ) : activeTab === 'BANK' && (userProfile?.role === 'ADMIN' || userProfile?.role === 'REVIEWER' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
+          <BankRegistryPage
+            transactions={bankTransactions}
+            userProfile={userProfile}
+            isAdmin={isAdmin}
+            bankBalance={summary.bankBalance}
+            bankBalanceDate={summary.id || selectedDate.toISOString().split('T')[0]}
+            onUpdateBankBalance={handleUpdateBankBalance}
+            onAdd={() => {
+              if (!isAdmin) {
+                alert("Unauthorized: Only admins can manage bank transactions.");
+                return;
+              }
+              setEditingBankTransaction(null);
+              setIsBankModalOpen(true);
+            }}
+            onEdit={(tx: BankTransaction) => {
+              if (!isAdmin) {
+                alert("Unauthorized: Only admins can manage bank transactions.");
+                return;
+              }
+              setEditingBankTransaction(tx);
+              setIsBankModalOpen(true);
+            }}
+            onDelete={(tx: BankTransaction) => {
+              if (!isAdmin) {
+                alert("Unauthorized: Only admins can manage bank transactions.");
+                return;
+              }
+              setBankTransactionToDelete(tx.id);
+              setIsBankDeleteModalOpen(true);
+            }}
+            formatCurrency={formatCurrency}
+            bankFilter={bankFilter}
+            setBankFilter={setBankFilter}
+            bankTypeFilter={bankTypeFilter}
+            setBankTypeFilter={setBankTypeFilter}
+            bankStatusFilter={bankStatusFilter}
+            setBankStatusFilter={setBankStatusFilter}
+            bankSearchTerm={bankSearchTerm}
+            setBankSearchTerm={setBankSearchTerm}
+            bankDateStart={bankDateStart}
+            setBankDateStart={setBankDateStart}
+            bankDateEnd={bankDateEnd}
+            setBankDateEnd={setBankDateEnd}
+            selectedBankIds={selectedBankIds}
+            setSelectedBankIds={setSelectedBankIds}
+            onBulkDelete={handleBulkDeleteBankTransactions}
+            onExportPDF={handleExportBankPDF}
+            onExportPNG={handleExportBankPNG}
+          />
         ) : activeTab === 'DRIVE' ? (
           <DailyDrivePage
             reports={reports}
+            vouchers={vouchers}
             user={user}
             userProfile={userProfile}
-            onRefresh={fetchReports}
+            onRefreshReports={fetchReports}
+            onRefreshVouchers={fetchVouchers}
           />
         ) : activeTab === 'REVIEW' && (userProfile?.role === 'ADMIN' || userProfile?.role === 'REVIEWER' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
           <DailyReviewPage
@@ -1926,6 +2476,77 @@ export default function App() {
                 </button>
                 <button
                   onClick={handleDeleteReview}
+                  className="flex-1 bg-[#DC2626] text-white py-4 font-black uppercase tracking-widest text-[10px] hover:bg-[#B91C1C] transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isBankModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsBankModalOpen(false)}
+              className="absolute inset-0 bg-[#00000066] backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-white border-4 border-black brutalist-shadow overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between bg-black text-white">
+                <h3 className="text-xs font-black uppercase tracking-widest">{editingBankTransaction ? "Update Bank Transaction" : "New Bank Transaction"}</h3>
+                <button onClick={closeBankModal} className="hover:opacity-50">
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+              <BankTransactionForm
+                initialData={editingBankTransaction}
+                onClose={closeBankModal}
+                userId={user.id}
+              />
+            </motion.div>
+          </div>
+        )}
+
+        {isBankDeleteModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsBankDeleteModalOpen(false)}
+              className="absolute inset-0 bg-[#00000099] backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-sm bg-white border-8 border-black p-8 text-center brutalist-shadow"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-20 h-20 bg-[#FEE2E2] text-[#DC2626] rounded-none flex items-center justify-center mx-auto mb-6 border-4 border-[#DC2626]">
+                <Trash2 className="w-10 h-10" />
+              </div>
+              <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Purge Transaction</h2>
+              <p className="text-sm font-bold text-[#64748B] uppercase tracking-widest mb-8">This action will remove the transaction record permanently.</p>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setIsBankDeleteModalOpen(false)}
+                  className="flex-1 py-4 border-4 border-black font-black uppercase tracking-widest text-[10px] hover:bg-[#F8FAFC] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteBankTransaction}
                   className="flex-1 bg-[#DC2626] text-white py-4 font-black uppercase tracking-widest text-[10px] hover:bg-[#B91C1C] transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                 >
                   Delete
@@ -2751,22 +3372,38 @@ function UserManagementPage({ users }: { users: AppUser[] }) {
 }
 
 // ==========================================
+// ==========================================
 // DAILY DRIVE PAGE COMPONENT (SUPABASE STORAGE)
 // ==========================================
 
 interface DailyDrivePageProps {
   reports: any[];
+  vouchers: any[];
   user: any;
   userProfile: any;
-  onRefresh: () => void;
+  onRefreshReports: () => void;
+  onRefreshVouchers: () => void;
 }
 
-function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePageProps) {
+function DailyDrivePage({ 
+  reports, 
+  vouchers, 
+  user, 
+  userProfile, 
+  onRefreshReports, 
+  onRefreshVouchers 
+}: DailyDrivePageProps) {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string; filePath: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [driveTab, setDriveTab] = useState<'REPORTS' | 'VOUCHERS'>('REPORTS');
+
+  const currentBucket = driveTab === 'REPORTS' ? 'cash-reports' : 'cash-vouchers';
+  const currentTable = driveTab === 'REPORTS' ? 'reports' : 'vouchers';
+  const currentFiles = driveTab === 'REPORTS' ? reports : vouchers;
+  const currentRefresh = driveTab === 'REPORTS' ? onRefreshReports : onRefreshVouchers;
 
   const isAdmin = useMemo(() => {
     return userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com';
@@ -2774,18 +3411,18 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
 
   // Calculate storage usage (limit = 1 GB = 1,073,741,824 bytes)
   const totalSize = useMemo(() => {
-    return reports.reduce((sum, r) => sum + Number(r.file_size || 0), 0);
-  }, [reports]);
+    return currentFiles.reduce((sum, r) => sum + Number(r.file_size || 0), 0);
+  }, [currentFiles]);
 
   const storagePercentage = useMemo(() => {
-    const totalBytesLimit = 1024 * 1024 * 1024; // 1 GB
-    return Math.min(100, (totalSize / totalBytesLimit) * 100);
+    const limit = 1073741824; // 1 GB in bytes
+    return Math.min((totalSize / limit) * 100, 100);
   }, [totalSize]);
 
   const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || isNaN(bytes)) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
@@ -2817,34 +3454,35 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!isAdmin) {
-      alert("Unauthorized: Only administrators are permitted to upload reports to the drive.");
+    if (userProfile?.role !== 'ADMIN' && user?.email?.trim().toLowerCase() !== 'rcascalla1@gmail.com') {
+      alert("Unauthorized: Only administrators are permitted to upload reports or vouchers.");
       return;
     }
 
-    if (file.size > 52428800) { // 50 MB
-      alert("Error: File exceeds the maximum free-tier size limit of 50 MB!");
+    if (file.size > 52428800) {
+      alert("File size exceeds the 50 MB limits. Please optimize your statement before uploading.");
       return;
     }
 
     setUploading(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-      const filePath = `reports/${fileName}`;
+    const fileExt = file.name.split('.').pop();
+    // Use bucket/tab specific naming prefix
+    const prefix = driveTab === 'REPORTS' ? 'report' : 'voucher';
+    const filePath = `${prefix}_${Date.now()}.${fileExt}`;
 
+    try {
       // 1. Upload to Supabase Storage
       const { error: storageError } = await supabase.storage
-        .from('cash-reports')
+        .from(currentBucket)
         .upload(filePath, file);
 
       if (storageError) {
         throw new Error(`Storage error: ${storageError.message}`);
       }
 
-      // 2. Insert metadata into 'reports' table
+      // 2. Insert metadata into public database table
       const { error: dbError } = await supabase
-        .from('reports')
+        .from(currentTable)
         .insert([{
           name: file.name,
           file_path: filePath,
@@ -2854,14 +3492,15 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
 
       if (dbError) {
         // Cleanup storage file if metadata insert fails
-        await supabase.storage.from('cash-reports').remove([filePath]);
+        await supabase.storage.from(currentBucket).remove([filePath]);
         throw new Error(`Database error: ${dbError.message}`);
       }
 
-      onRefresh();
+      currentRefresh();
     } catch (err: any) {
       console.error("Upload failed", err);
-      alert(err.message || "Upload failed. Make sure you executed the SQL code from SUPABASE_DRIVE_SETUP.md in your dashboard.");
+      const setupFile = driveTab === 'REPORTS' ? 'SUPABASE_DRIVE_SETUP.md' : 'SUPABASE_VOUCHERS_SETUP.md';
+      alert(err.message || `Upload failed. Make sure you executed the SQL code from ${setupFile} in your dashboard.`);
     } finally {
       setUploading(false);
     }
@@ -2880,7 +3519,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
     setPreviewLoading(true);
     try {
       const { data, error } = await supabase.storage
-        .from('cash-reports')
+        .from(currentBucket)
         .createSignedUrl(filePath, 300);
 
       if (error) throw error;
@@ -2909,7 +3548,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
 
     try {
       const { data, error } = await supabase.storage
-        .from('cash-reports')
+        .from(currentBucket)
         .createSignedUrl(filePath, 60, { download: name });
 
       if (error) {
@@ -2935,27 +3574,28 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
 
   const deleteFile = async (id: string, filePath: string) => {
     if (userProfile?.role !== 'ADMIN' && user?.email?.trim().toLowerCase() !== 'rcascalla1@gmail.com') {
-      alert("Unauthorized: Only administrators are permitted to delete reports from the drive.");
+      alert("Unauthorized: Only administrators are permitted to delete items from this drive.");
       return;
     }
 
-    if (!confirm("Are you sure you want to permanently delete this report?")) {
+    const typeStr = driveTab === 'REPORTS' ? 'report' : 'voucher';
+    if (!confirm(`Are you sure you want to permanently delete this ${typeStr}?`)) {
       return;
     }
 
     try {
       // 1. Delete from Supabase Storage
       const { error: storageError } = await supabase.storage
-        .from('cash-reports')
+        .from(currentBucket)
         .remove([filePath]);
 
       if (storageError) {
         console.warn("Storage deletion warning", storageError);
       }
 
-      // 2. Delete from database 'reports' table
+      // 2. Delete from database table
       const { error: dbError } = await supabase
-        .from('reports')
+        .from(currentTable)
         .delete()
         .eq('id', id);
 
@@ -2963,10 +3603,10 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
         throw dbError;
       }
 
-      onRefresh();
+      currentRefresh();
     } catch (err: any) {
       console.error("Deletion failed", err);
-      alert(`Failed to delete report: ${err.message}`);
+      alert(`Failed to delete document: ${err.message}`);
     }
   };
 
@@ -2980,11 +3620,37 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
 
   return (
     <div className="space-y-8">
+      {/* Brutalist Sub-Tab Switcher */}
+      <div className="flex gap-2 border-b-4 border-black pb-4">
+        <button
+          onClick={() => setDriveTab('REPORTS')}
+          className={cn(
+            "px-4 py-2 text-[10px] font-black uppercase tracking-wider border-2 border-black brutalist-shadow transition-all flex items-center gap-2",
+            driveTab === 'REPORTS' ? "bg-black text-white" : "bg-white text-black hover:bg-slate-50"
+          )}
+        >
+          <Folder className="w-3.5 h-3.5" />
+          Cash Reports Folder
+        </button>
+        <button
+          onClick={() => setDriveTab('VOUCHERS')}
+          className={cn(
+            "px-4 py-2 text-[10px] font-black uppercase tracking-wider border-2 border-black brutalist-shadow transition-all flex items-center gap-2",
+            driveTab === 'VOUCHERS' ? "bg-black text-white" : "bg-white text-black hover:bg-slate-50"
+          )}
+        >
+          <Receipt className="w-3.5 h-3.5" />
+          Cash Vouchers Folder
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex flex-col">
           <span className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-2">Vault Storage</span>
-          <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Reports Drive</h2>
+          <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">
+            {driveTab === 'REPORTS' ? 'Reports Drive' : 'Vouchers Drive'}
+          </h2>
         </div>
         
         {/* Storage Bar (wow factor) */}
@@ -2992,7 +3658,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
           <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1.5">
             <span className="flex items-center gap-1">
               <HardDrive className="w-3.5 h-3.5" />
-              Drive Capacity
+              {driveTab === 'REPORTS' ? 'Reports' : 'Vouchers'} Capacity
             </span>
             <span>{formatSize(totalSize)} / 1 GB</span>
           </div>
@@ -3032,7 +3698,9 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
           {uploading ? (
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-black"></div>
-              <span className="text-xs font-black uppercase tracking-widest">Uploading Report to Supabase Storage...</span>
+              <span className="text-xs font-black uppercase tracking-widest">
+                Uploading {driveTab === 'REPORTS' ? 'Report' : 'Voucher'} to Supabase Storage...
+              </span>
             </div>
           ) : (
             <>
@@ -3040,8 +3708,12 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                 <Upload className="w-6 h-6" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-black uppercase tracking-widest">Drag and drop report here</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">or click to browse files (max 50 MB)</span>
+                <span className="text-xs font-black uppercase tracking-widest">
+                  Drag and drop {driveTab === 'REPORTS' ? 'report' : 'voucher'} here
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+                  or click to browse files (max 50 MB)
+                </span>
               </div>
             </>
           )}
@@ -3056,7 +3728,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
             <span className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] font-mono">Vault Storage Access</span>
             <h4 className="text-sm font-black uppercase mt-1">Read-Only Document Drive</h4>
             <p className="text-xs opacity-60 mt-1 uppercase font-bold tracking-wider leading-relaxed">
-              You have secure read access to all uploaded cash reports. Only system administrators have permission to upload files or delete items from this folder.
+              You have secure read access to all uploaded {driveTab === 'REPORTS' ? 'cash reports' : 'cash vouchers'}. Only system administrators have permission to upload files or delete items from this folder.
             </p>
           </div>
         </div>
@@ -3067,7 +3739,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
         <div className="p-4 md:p-6 border-b-2 border-black flex items-center justify-between">
           <h3 className="text-xs font-black uppercase tracking-widest flex items-center">
             <span className="w-2 h-2 bg-black mr-2"></span>
-            Uploaded Reports ({reports.length})
+            Uploaded {driveTab === 'REPORTS' ? 'Reports' : 'Vouchers'} ({currentFiles.length})
           </h3>
         </div>
 
@@ -3083,41 +3755,43 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F3F4F6] text-sm font-bold">
-              {reports.map((report) => (
-                <tr key={report.id} className="hover:bg-slate-50 transition-colors">
+              {currentFiles.map((doc) => (
+                <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
                   {/* File Name */}
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => triggerPreview(report.file_path, report.name)}
+                      onClick={() => triggerPreview(doc.file_path, doc.name)}
                       className="flex items-center gap-3 text-left hover:text-[#2563EB] transition-colors focus:outline-none group"
                     >
-                      {getFileIcon(report.name)}
-                      <span className="truncate max-w-[200px] sm:max-w-[350px] group-hover:underline decoration-dashed decoration-1" title={report.name}>{report.name}</span>
+                      {getFileIcon(doc.name)}
+                      <span className="truncate max-w-[200px] sm:max-w-[350px] group-hover:underline decoration-dashed decoration-1" title={doc.name}>
+                        {doc.name}
+                      </span>
                     </button>
                   </td>
                   {/* Size */}
                   <td className="px-6 py-4 font-mono text-xs opacity-60">
-                    {formatSize(report.file_size)}
+                    {formatSize(doc.file_size)}
                   </td>
                   {/* Date */}
                   <td className="px-6 py-4 font-mono text-xs opacity-60">
-                    {new Date(report.uploaded_at).toLocaleDateString()}
+                    {new Date(doc.uploaded_at).toLocaleDateString()}
                     <span className="hidden md:inline ml-1 opacity-50">
-                      {new Date(report.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(doc.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </td>
                   {/* Uploaded By */}
                   <td className="px-6 py-4">
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-800 text-[10px] font-black uppercase border border-black/10">
-                      {report.uploader?.displayName || 'System'}
+                      {doc.uploader?.displayName || 'System'}
                     </span>
                   </td>
                   {/* Actions */}
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      {['pdf', 'png', 'jpg', 'jpeg', 'gif'].includes(report.name.split('.').pop()?.toLowerCase() || '') && (
+                      {['pdf', 'png', 'jpg', 'jpeg', 'gif'].includes(doc.name.split('.').pop()?.toLowerCase() || '') && (
                         <button
-                          onClick={() => triggerPreview(report.file_path, report.name)}
+                          onClick={() => triggerPreview(doc.file_path, doc.name)}
                           className="p-1.5 bg-[#EFF6FF] border border-[#BFDBFE] hover:border-[#2563EB] text-[#2563EB] transition-all hover:bg-[#2563EB] hover:text-white"
                           title="View inline"
                         >
@@ -3125,7 +3799,7 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                         </button>
                       )}
                       <button
-                        onClick={() => downloadFile(report.file_path, report.name)}
+                        onClick={() => downloadFile(doc.file_path, doc.name)}
                         className="p-1.5 bg-[#F1F5F9] border border-black/10 hover:border-black text-black transition-all hover:bg-black hover:text-white"
                         title="Download file"
                       >
@@ -3133,9 +3807,9 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                       </button>
                       {(userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') && (
                         <button
-                          onClick={() => deleteFile(report.id, report.file_path)}
+                          onClick={() => deleteFile(doc.id, doc.file_path)}
                           className="p-1.5 bg-[#FEF2F2] border border-[#FECACA] hover:border-[#DC2626] text-[#DC2626] transition-all hover:bg-[#DC2626] hover:text-white"
-                          title="Purge Report"
+                          title="Purge Document"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -3145,10 +3819,10 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
                 </tr>
               ))}
               
-              {reports.length === 0 && (
+              {currentFiles.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-16 text-center text-xs font-black uppercase opacity-20 tracking-widest">
-                    No reports uploaded to the drive. Drop a file above to begin!
+                    No documents uploaded to this folder. Drop a file above to begin!
                   </td>
                 </tr>
               )}
@@ -3247,3 +3921,902 @@ function DailyDrivePage({ reports, user, userProfile, onRefresh }: DailyDrivePag
   );
 }
 
+// ============================================================================
+// BANK REGISTRY COMPONENTS
+// ============================================================================
+
+interface BankTransactionFormProps {
+  initialData: BankTransaction | null;
+  onClose: () => void;
+  userId: string;
+}
+
+function BankTransactionForm({ initialData, onClose, userId }: BankTransactionFormProps) {
+  const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+  const [type, setType] = useState<BankTransactionType>(initialData?.type || 'PAYMENT_TO_BE_MADE');
+  const [particulars, setParticulars] = useState(initialData?.particulars || '');
+  const [refNo, setRefNo] = useState(initialData?.refNo || '');
+  const [bankName, setBankName] = useState(initialData?.bankName || 'Al Rajhi Bank');
+  const [amount, setAmount] = useState(initialData?.amount ? String(initialData.amount) : '');
+  const [status, setStatus] = useState<BankTransactionStatus>(initialData?.status || 'CLEARED');
+  const [remarks, setRemarks] = useState(initialData?.remarks || '');
+  const [submitting, setSubmitting] = useState(false);
+
+  const bankOptions = ['Al Rajhi Bank', 'SNB (AlAhli)', 'Riyad Bank', 'SABB', 'Other'];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!particulars || !amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      alert("Please fill all required fields correctly. Amount must be a positive number.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const payload = {
+      date,
+      type,
+      particulars,
+      refNo: refNo || null,
+      bankName,
+      amount: Number(amount),
+      status,
+      remarks: remarks || null,
+      createdBy: userId
+    };
+
+    try {
+      if (initialData) {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .update(payload)
+          .eq('id', initialData.id);
+        if (error) throw error;
+        alert("Transaction updated successfully!");
+      } else {
+        const { error } = await supabase
+          .from('bank_transactions')
+          .insert([payload]);
+        if (error) throw error;
+        alert("Transaction added successfully!");
+      }
+      onClose();
+    } catch (error: any) {
+      console.error("Failed to save bank transaction:", error);
+      if (isMissingTableError(error, 'bank_transactions')) {
+        alert(missingBankTableMessage);
+        return;
+      }
+      alert(`Database operation failed: ${error.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="p-6 space-y-4 font-bold text-sm">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Date *</label>
+          <input
+            type="date"
+            required
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Type *</label>
+          <select
+            value={type}
+            onChange={e => setType(e.target.value as BankTransactionType)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50"
+          >
+            {initialData?.type === 'DEPOSIT' && <option value="DEPOSIT">DEPOSIT (+)</option>}
+            <option value="PAYMENT_TO_BE_MADE">PAYMENT TO BE MADE (-)</option>
+            <option value="WITHDRAWAL">WITHDRAWAL (-)</option>
+            <option value="KOREA_PAYMENT">KOREA PAYMENT (-)</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Source / Account *</label>
+          <select
+            value={bankName}
+            onChange={e => setBankName(e.target.value)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none"
+          >
+            {bankOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Reference No.</label>
+          <input
+            type="text"
+            placeholder="e.g. invoice, transfer, voucher reference"
+            value={refNo}
+            onChange={e => setRefNo(e.target.value)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Particulars *</label>
+        <input
+          type="text"
+          required
+          placeholder="e.g. Cash replenishment for petty cash, Supplier payment"
+          value={particulars}
+          onChange={e => setParticulars(e.target.value)}
+          className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Amount (SAR) *</label>
+          <input
+            type="number"
+            step="0.01"
+            required
+            min="0.01"
+            placeholder="0.00"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50 font-mono"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Reconciliation Status *</label>
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value as BankTransactionStatus)}
+            className="w-full p-3 border-2 border-black rounded-none focus:outline-none"
+          >
+            <option value="CLEARED">CLEARED</option>
+            <option value="PENDING">PENDING</option>
+            <option value="BOUNCED">BOUNCED</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-black uppercase tracking-widest opacity-50 mb-1">Remarks / Internal Note</label>
+        <textarea
+          placeholder="Optional remarks..."
+          value={remarks}
+          onChange={e => setRemarks(e.target.value)}
+          className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50 min-h-[60px]"
+        />
+      </div>
+
+      <div className="flex gap-4 pt-4 border-t-2 border-black/10">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 py-3 border-2 border-black text-black font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex-1 py-3 bg-black text-white font-black uppercase tracking-widest text-xs hover:bg-zinc-800 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+        >
+          {submitting ? "Processing..." : initialData ? "Update Record" : "Add Record"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface BankRegistryPageProps {
+  transactions: BankTransaction[];
+  userProfile: AppUser | null;
+  isAdmin: boolean;
+  bankBalance: number;
+  bankBalanceDate: string;
+  onUpdateBankBalance: (value: number) => Promise<void>;
+  onAdd: () => void;
+  onEdit: (tx: BankTransaction) => void;
+  onDelete: (tx: BankTransaction) => void;
+  formatCurrency: (value: number) => string;
+  bankFilter: string;
+  setBankFilter: (val: string) => void;
+  bankTypeFilter: 'ALL' | BankTransactionType;
+  setBankTypeFilter: (val: 'ALL' | BankTransactionType) => void;
+  bankStatusFilter: 'ALL' | 'CLEARED' | 'PENDING' | 'BOUNCED';
+  setBankStatusFilter: (val: 'ALL' | 'CLEARED' | 'PENDING' | 'BOUNCED') => void;
+  bankSearchTerm: string;
+  setBankSearchTerm: (val: string) => void;
+  bankDateStart: string;
+  setBankDateStart: (val: string) => void;
+  bankDateEnd: string;
+  setBankDateEnd: (val: string) => void;
+  selectedBankIds: string[];
+  setSelectedBankIds: React.Dispatch<React.SetStateAction<string[]>>;
+  onBulkDelete: () => void;
+  onExportPDF: () => void;
+  onExportPNG: () => void;
+}
+
+function BankRegistryPage({
+  transactions,
+  userProfile,
+  isAdmin,
+  bankBalance,
+  bankBalanceDate,
+  onUpdateBankBalance,
+  onAdd,
+  onEdit,
+  onDelete,
+  formatCurrency,
+  bankFilter,
+  setBankFilter,
+  bankTypeFilter,
+  setBankTypeFilter,
+  bankStatusFilter,
+  setBankStatusFilter,
+  bankSearchTerm,
+  setBankSearchTerm,
+  bankDateStart,
+  setBankDateStart,
+  bankDateEnd,
+  setBankDateEnd,
+  selectedBankIds,
+  setSelectedBankIds,
+  onBulkDelete,
+  onExportPDF,
+  onExportPNG
+}: BankRegistryPageProps) {
+  const [isEditingBankBalance, setIsEditingBankBalance] = useState(false);
+  const [bankBalanceDraft, setBankBalanceDraft] = useState(String(bankBalance));
+  const [isSavingBankBalance, setIsSavingBankBalance] = useState(false);
+
+  useEffect(() => {
+    if (!isEditingBankBalance) {
+      setBankBalanceDraft(String(bankBalance));
+    }
+  }, [bankBalance, isEditingBankBalance]);
+
+  const filtered = useMemo(() => {
+    return transactions.filter(tx => {
+      if (bankFilter !== 'ALL' && tx.bankName !== bankFilter) return false;
+      if (bankTypeFilter !== 'ALL' && tx.type !== bankTypeFilter) return false;
+      if (bankStatusFilter !== 'ALL' && tx.status !== bankStatusFilter) return false;
+      if (bankDateStart && tx.date < bankDateStart) return false;
+      if (bankDateEnd && tx.date > bankDateEnd) return false;
+      if (bankSearchTerm.trim()) {
+        const query = bankSearchTerm.toLowerCase();
+        const particularsMatch = tx.particulars?.toLowerCase().includes(query);
+        const refNoMatch = tx.refNo?.toLowerCase().includes(query);
+        const remarksMatch = tx.remarks?.toLowerCase().includes(query);
+        const amountMatch = String(tx.amount).includes(query);
+        if (!particularsMatch && !refNoMatch && !remarksMatch && !amountMatch) return false;
+      }
+      return true;
+    });
+  }, [transactions, bankFilter, bankTypeFilter, bankStatusFilter, bankSearchTerm, bankDateStart, bankDateEnd]);
+
+  const totalIncoming = useMemo(() => {
+    return filtered
+      .filter(tx => tx.type === 'DEPOSIT')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  }, [filtered]);
+
+  const totalPaymentsToBeMade = useMemo(() => {
+    return filtered
+      .filter(tx => isPaymentToBeMadeType(tx.type))
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  }, [filtered]);
+
+  const totalWithdrawals = useMemo(() => {
+    return filtered
+      .filter(tx => tx.type === 'WITHDRAWAL')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  }, [filtered]);
+
+  const netFlow = totalIncoming - totalPaymentsToBeMade - totalWithdrawals;
+
+  const pendingAmount = useMemo(() => {
+    return filtered
+      .filter(tx => tx.status === 'PENDING')
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  }, [filtered]);
+
+  const isAllSelected = filtered.length > 0 && selectedBankIds.length === filtered.length;
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedBankIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedBankIds([]);
+    } else {
+      setSelectedBankIds(filtered.map(tx => tx.id));
+    }
+  };
+
+  const bankOptions = ['Al Rajhi Bank', 'SNB (AlAhli)', 'Riyad Bank', 'SABB', 'Other'];
+
+  const currentBookBalance = bankBalance + netFlow;
+
+  const handleSaveBankBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextBalance = Number(bankBalanceDraft);
+
+    if (!Number.isFinite(nextBalance)) {
+      alert("Please enter a valid bank balance.");
+      return;
+    }
+
+    setIsSavingBankBalance(true);
+    try {
+      await onUpdateBankBalance(nextBalance);
+      setIsEditingBankBalance(false);
+    } catch (error) {
+      console.error("Failed to update bank balance:", error);
+    } finally {
+      setIsSavingBankBalance(false);
+    }
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
+        <div className="bg-white border-2 border-black p-6 brutalist-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+            <Wallet className="w-12 h-12 text-[#2563EB]" />
+          </div>
+          <div className="relative z-10">
+            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Bank Book Balance</span>
+            {isEditingBankBalance ? (
+              <form onSubmit={handleSaveBankBalance} className="mt-2 space-y-3">
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={bankBalanceDraft}
+                  onChange={e => setBankBalanceDraft(e.target.value)}
+                  className="w-full border-2 border-black bg-[#F8FAFC] px-3 py-2 text-2xl font-black font-mono focus:outline-none focus:bg-amber-50"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingBankBalance}
+                    className="flex-1 bg-black text-white px-3 py-2 text-[9px] font-black uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {isSavingBankBalance ? "Saving" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBankBalanceDraft(String(bankBalance));
+                      setIsEditingBankBalance(false);
+                    }}
+                    className="px-3 py-2 border-2 border-black text-[9px] font-black uppercase tracking-widest hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="text-3xl font-black uppercase tracking-tighter mt-2 text-[#2563EB] font-mono">
+                  {formatCurrency(bankBalance)}
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-40">{bankBalanceDate}</span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setIsEditingBankBalance(true)}
+                      className="px-2.5 py-1 bg-black text-white hover:bg-[#27272A] text-[9px] font-black uppercase tracking-widest"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="h-1 bg-[#2563EB] w-full mt-4"></div>
+        </div>
+
+        <div className="bg-white border-2 border-black p-6 brutalist-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+            <Receipt className="w-12 h-12 text-[#F59E0B]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Payments to Be Made</span>
+          <div className="text-3xl font-black uppercase tracking-tighter mt-2 text-[#F59E0B] font-mono">
+            {formatCurrency(totalPaymentsToBeMade)}
+          </div>
+          <div className="h-1 bg-[#F59E0B] w-full mt-4"></div>
+        </div>
+
+        <div className="bg-white border-2 border-black p-6 brutalist-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+            <TrendingDown className="w-12 h-12 text-[#EF4444]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Withdrawals</span>
+          <div className="text-3xl font-black uppercase tracking-tighter mt-2 text-[#EF4444] font-mono">
+            {formatCurrency(totalWithdrawals)}
+          </div>
+          <div className="h-1 bg-[#EF4444] w-full mt-4"></div>
+        </div>
+
+        <div className="bg-white border-2 border-black p-6 brutalist-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+            <DollarSign className="w-12 h-12 text-[#3B82F6]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Current Book Balance</span>
+          <div className={cn(
+            "text-3xl font-black uppercase tracking-tighter mt-2 font-mono",
+            currentBookBalance >= 0 ? "text-[#3B82F6]" : "text-[#EF4444]"
+          )}>
+            {formatCurrency(currentBookBalance)}
+          </div>
+          <div className={cn("h-1 w-full mt-4", currentBookBalance >= 0 ? "bg-[#3B82F6]" : "bg-[#EF4444]")}></div>
+        </div>
+
+        <div className="bg-white border-2 border-black p-6 brutalist-shadow relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform">
+            <Clock className="w-12 h-12 text-[#F59E0B]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Pending Clearance</span>
+          <div className="text-3xl font-black uppercase tracking-tighter mt-2 text-[#F59E0B] font-mono">
+            {formatCurrency(pendingAmount)}
+          </div>
+          <div className="h-1 bg-[#F59E0B] w-full mt-4"></div>
+        </div>
+      </div>
+
+      <div className="bg-white border-2 border-black p-6 brutalist-shadow space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest bg-black text-white px-2.5 py-1">Filters</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Configure bank views</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onExportPDF}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-black bg-white text-black hover:bg-slate-100 font-black uppercase tracking-widest text-[10px] transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              PDF Statement
+            </button>
+            <button
+              onClick={onExportPNG}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-black bg-black text-white hover:bg-zinc-800 font-black uppercase tracking-widest text-[10px] transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Capture PNG
+            </button>
+            {isAdmin && (
+              <button
+                onClick={onAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-[#10B981] border-2 border-black text-white hover:bg-[#059669] font-black uppercase tracking-widest text-[10px] transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Add Record
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-4 border-t border-slate-100">
+          <div className="col-span-1 sm:col-span-2">
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Search particulars/ref</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={bankSearchTerm}
+                onChange={e => setBankSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50 font-bold"
+              />
+              <Search className="w-4 h-4 absolute left-3 top-2.5 opacity-40" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Source / Account</label>
+            <select
+              value={bankFilter}
+              onChange={e => setBankFilter(e.target.value)}
+              className="w-full p-2 border-2 border-black rounded-none focus:outline-none font-bold text-xs"
+            >
+              <option value="ALL">All Sources</option>
+              {bankOptions.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Transaction Type</label>
+            <select
+              value={bankTypeFilter}
+              onChange={e => setBankTypeFilter(e.target.value as any)}
+              className="w-full p-2 border-2 border-black rounded-none focus:outline-none font-bold text-xs"
+            >
+              <option value="ALL">All Types</option>
+              <option value="PAYMENT_TO_BE_MADE">PAYMENTS TO BE MADE (-)</option>
+              <option value="WITHDRAWAL">WITHDRAWALS (-)</option>
+              <option value="KOREA_PAYMENT">KOREA PAYMENT (-)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Clearance Status</label>
+            <select
+              value={bankStatusFilter}
+              onChange={e => setBankStatusFilter(e.target.value as any)}
+              className="w-full p-2 border-2 border-black rounded-none focus:outline-none font-bold text-xs"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="CLEARED">CLEARED</option>
+              <option value="PENDING">PENDING</option>
+              <option value="BOUNCED">BOUNCED</option>
+            </select>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={() => {
+                setBankFilter('ALL');
+                setBankTypeFilter('ALL');
+                setBankStatusFilter('ALL');
+                setBankSearchTerm('');
+                setBankDateStart('');
+                setBankDateEnd('');
+              }}
+              className="w-full py-2 border-2 border-black text-black hover:bg-slate-100 transition-colors text-[9px] font-black uppercase tracking-widest"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={bankDateStart}
+              onChange={e => setBankDateStart(e.target.value)}
+              className="w-full p-2 border-2 border-black rounded-none focus:outline-none text-xs font-bold"
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">End Date</label>
+            <input
+              type="date"
+              value={bankDateEnd}
+              onChange={e => setBankDateEnd(e.target.value)}
+              className="w-full p-2 border-2 border-black rounded-none focus:outline-none text-xs font-bold"
+            />
+          </div>
+        </div>
+      </div>
+
+      {selectedBankIds.length > 0 && isAdmin && (
+        <div className="bg-[#FEF2F2] border-4 border-black p-4 flex items-center justify-between brutalist-shadow">
+          <div className="flex items-center gap-2">
+            <Trash2 className="w-5 h-5 text-[#DC2626]" />
+            <span className="text-xs font-black uppercase tracking-widest text-black">
+              {selectedBankIds.length} Selected Transaction(s)
+            </span>
+          </div>
+          <button
+            onClick={onBulkDelete}
+            className="px-4 py-2 bg-[#DC2626] border-2 border-black text-white hover:bg-[#B91C1C] text-[10px] font-black uppercase tracking-widest transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          >
+            Purge Selected
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white border-2 border-black brutalist-shadow overflow-hidden">
+        <div className="p-4 border-b-2 border-black flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest flex items-center">
+            <span className="w-2.5 h-2.5 bg-black mr-2"></span>
+            Transactions Ledger ({filtered.length})
+          </span>
+        </div>
+
+        <div className="overflow-x-auto hidden md:block">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[#F1F5F9] text-[10px] font-black uppercase tracking-widest border-b-2 border-black">
+              <tr>
+                {isAdmin && (
+                  <th className="px-6 py-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 border-2 border-black rounded-none cursor-pointer"
+                    />
+                  </th>
+                )}
+                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Source / Account</th>
+                <th className="px-6 py-4">Type</th>
+                <th className="px-6 py-4">Particulars / Ref No</th>
+                <th className="px-6 py-4 text-right">Amount (SAR)</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Remarks</th>
+                {isAdmin && <th className="px-6 py-4 text-right">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm font-bold">
+              {filtered.map((tx) => (
+                <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
+                  {isAdmin && (
+                    <td className="px-6 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedBankIds.includes(tx.id)}
+                        onChange={() => toggleSelectRow(tx.id)}
+                        className="w-4 h-4 border-2 border-black rounded-none cursor-pointer"
+                      />
+                    </td>
+                  )}
+                  <td className="px-6 py-4 font-mono text-xs whitespace-nowrap">{tx.date}</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-800 text-[10px] font-black uppercase border border-black/10">
+                      {tx.bankName}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={cn(
+                      "px-2 py-0.5 text-[10px] font-black border uppercase tracking-wider",
+                      tx.type === 'DEPOSIT' 
+                        ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
+                        : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
+                    )}>
+                      {formatBankTransactionType(tx.type)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-[13px] text-slate-900 font-bold">{tx.particulars}</span>
+                      {tx.refNo && (
+                        <span className="text-[10px] font-mono text-slate-400 mt-0.5">REF: {tx.refNo}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right font-mono text-base font-black">
+                    <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>
+                      {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={cn(
+                      "px-2.5 py-0.5 text-[9px] font-black border uppercase tracking-widest",
+                      tx.status === 'CLEARED' && "bg-[#E6F4EA] text-[#137333] border-[#137333]/20",
+                      tx.status === 'PENDING' && "bg-[#FEF7E0] text-[#B06000] border-[#B06000]/20",
+                      tx.status === 'BOUNCED' && "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
+                    )}>
+                      {tx.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-normal text-slate-500 italic max-w-xs truncate" title={tx.remarks}>
+                    {tx.remarks || '-'}
+                  </td>
+                  {isAdmin && (
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => onEdit(tx)}
+                          className="p-1.5 bg-[#EFF6FF] border border-[#BFDBFE] hover:border-[#2563EB] text-[#2563EB] transition-colors"
+                          title="Edit transaction"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDelete(tx)}
+                          className="p-1.5 bg-[#FEF2F2] border border-[#FECACA] hover:border-[#DC2626] text-[#DC2626] transition-colors"
+                          title="Delete transaction"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={isAdmin ? 9 : 7} className="px-6 py-16 text-center text-xs font-black uppercase opacity-20 tracking-widest">
+                    No transactions found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="md:hidden divide-y divide-slate-100">
+          {filtered.map(tx => (
+            <div key={tx.id} className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs opacity-50">{tx.date}</span>
+                <span className={cn(
+                  "px-2 py-0.5 text-[9px] font-black border uppercase tracking-wider",
+                  tx.type === 'DEPOSIT' 
+                    ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
+                    : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
+                )}>
+                  {formatBankTransactionType(tx.type)}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-xs font-black uppercase opacity-40">{tx.bankName}</span>
+                <h4 className="text-sm font-black text-slate-800 leading-tight mt-0.5">{tx.particulars}</h4>
+                {tx.refNo && <p className="text-[10px] font-mono text-slate-400 mt-0.5">REF: {tx.refNo}</p>}
+              </div>
+
+              <div className="flex items-end justify-between pt-2">
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block">Amount</span>
+                  <span className={cn(
+                    "font-mono text-lg font-black",
+                    tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"
+                  )}>
+                    {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className={cn(
+                    "px-2 py-0.5 text-[9px] font-black border uppercase tracking-widest",
+                    tx.status === 'CLEARED' && "bg-[#E6F4EA] text-[#137333] border-[#137333]/20",
+                    tx.status === 'PENDING' && "bg-[#FEF7E0] text-[#B06000] border-[#B06000]/20",
+                    tx.status === 'BOUNCED' && "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
+                  )}>
+                    {tx.status}
+                  </span>
+
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => onEdit(tx)}
+                        className="p-1 bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB]"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(tx)}
+                        className="p-1 bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="px-6 py-16 text-center text-xs font-black uppercase opacity-20 tracking-widest">
+              No transactions found.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div 
+        id="bank-registry-report-view" 
+        className="fixed -left-[9999px] top-0 w-[1000px] p-10 bg-white border-[10px] border-black space-y-8"
+        style={{ position: 'fixed', visibility: 'hidden' }}
+      >
+        <div className="border-b-4 border-black pb-4">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Financial Control System</span>
+          <h2 className="text-4xl font-black uppercase tracking-tighter">ADK CO., LTD</h2>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Bank Transactions Registry Statement</p>
+        </div>
+
+        <div className="bg-[#F8FAFC] border-2 border-black p-4 flex justify-between text-[11px] font-bold uppercase tracking-wider">
+          <div>Bank: {bankFilter}</div>
+          <div>Type: {bankTypeFilter === 'ALL' ? 'ALL' : formatBankTransactionType(bankTypeFilter)}</div>
+          <div>Status: {bankStatusFilter}</div>
+          <div>Date: {bankDateStart || 'Earliest'} to {bankDateEnd || 'Latest'}</div>
+        </div>
+
+        <div className="grid grid-cols-5 gap-4">
+          <div className="border-2 border-black p-4 bg-[#EFF6FF]">
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Bank Book Balance</span>
+            <div className="text-xl font-black mt-1 text-[#2563EB] font-mono">{formatCurrency(bankBalance)}</div>
+          </div>
+          <div className="border-2 border-black p-4 bg-[#F0FDF4]">
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Payments to Make</span>
+            <div className="text-xl font-black mt-1 text-[#10B981] font-mono">{formatCurrency(totalPaymentsToBeMade)}</div>
+          </div>
+          <div className="border-2 border-black p-4 bg-[#FEF2F2]">
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Withdrawals</span>
+            <div className="text-xl font-black mt-1 text-[#EF4444] font-mono">{formatCurrency(totalWithdrawals)}</div>
+          </div>
+          <div className="border-2 border-black p-4 bg-[#EFF6FF]">
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Current Balance</span>
+            <div className={cn("text-xl font-black mt-1 font-mono", currentBookBalance >= 0 ? "text-[#3B82F6]" : "text-[#EF4444]")}>
+              {formatCurrency(currentBookBalance)}
+            </div>
+          </div>
+          <div className="border-2 border-black p-4 bg-[#FFFBEB]">
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Pending</span>
+            <div className="text-xl font-black mt-1 text-[#F59E0B] font-mono">{formatCurrency(pendingAmount)}</div>
+          </div>
+        </div>
+
+        <table className="w-full text-left border-collapse border-2 border-black">
+          <thead>
+            <tr className="bg-black text-white text-[9px] font-black uppercase tracking-widest">
+              <th className="p-3 border border-black">No.</th>
+              <th className="p-3 border border-black">Date</th>
+              <th className="p-3 border border-black">Source / Account</th>
+              <th className="p-3 border border-black">Type</th>
+              <th className="p-3 border border-black">Particulars / Ref</th>
+              <th className="p-3 border border-black text-right">Amount (SAR)</th>
+              <th className="p-3 border border-black">Status</th>
+            </tr>
+          </thead>
+          <tbody className="text-[11px] font-bold">
+            {filtered.map((tx, idx) => (
+              <tr key={tx.id} className="border-b border-black">
+                <td className="p-3 border border-black font-mono">{idx + 1}</td>
+                <td className="p-3 border border-black font-mono">{tx.date}</td>
+                <td className="p-3 border border-black">{tx.bankName}</td>
+                <td className="p-3 border border-black">
+                  <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>{formatBankTransactionType(tx.type)}</span>
+                </td>
+                <td className="p-3 border border-black">
+                  <div>{tx.particulars}</div>
+                  {tx.refNo && <div className="text-[9px] font-mono text-slate-400">REF: {tx.refNo}</div>}
+                </td>
+                <td className="p-3 border border-black text-right font-mono font-black">
+                  <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>
+                    {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                  </span>
+                </td>
+                <td className="p-3 border border-black">
+                  <span className={cn(
+                    "text-[9px] font-black uppercase tracking-widest",
+                    tx.status === 'CLEARED' && "text-[#10B981]",
+                    tx.status === 'PENDING' && "text-[#F59E0B]",
+                    tx.status === 'BOUNCED' && "text-[#EF4444]"
+                  )}>
+                    {tx.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="flex justify-between pt-12">
+          <div className="w-1/3 text-center">
+            <div className="border-b border-black h-8"></div>
+            <p className="text-[10px] font-black uppercase mt-2">Prepared By</p>
+            <p className="text-[9px] text-slate-400">Financial Officer</p>
+          </div>
+          <div className="w-1/3 text-center">
+            <div className="border-b border-black h-8"></div>
+            <p className="text-[10px] font-black uppercase mt-2">BOSS SEKON KIM</p>
+            <p className="text-[9px] text-slate-400">Managing Director / CEO</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
