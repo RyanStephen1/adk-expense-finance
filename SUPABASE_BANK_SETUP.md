@@ -12,7 +12,7 @@ Run this SQL block to create the table, assign correct types, and set up relatio
 CREATE TABLE IF NOT EXISTS public.bank_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "date" TEXT NOT NULL,                  -- Format: 'YYYY-MM-DD'
-  "type" TEXT NOT NULL,                  -- 'PAYMENT_TO_BE_MADE', 'WITHDRAWAL', 'KOREA_PAYMENT' (legacy 'DEPOSIT' is also supported)
+  "type" TEXT NOT NULL,                  -- 'DEPOSIT', 'FUND_TRANSFER', 'DEPOSIT_FROM_KOREA', 'PAYMENT_TO_BE_MADE', 'WITHDRAWAL', 'KOREA_PAYMENT'
   "particulars" TEXT NOT NULL,           -- Description of transaction
   "refNo" TEXT,                          -- Reference number, invoice, voucher, or transfer reference
   "bankName" TEXT NOT NULL,              -- 'Al Rajhi Bank', 'SNB (AlAhli)', 'Riyad Bank', 'SABB', etc.

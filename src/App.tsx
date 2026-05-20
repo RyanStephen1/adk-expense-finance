@@ -110,11 +110,27 @@ const isMissingTableError = (error: any, tableName: string) => {
 const missingBankTableMessage =
   'Bank Transactions is not set up in Supabase yet. Create the bank_transactions table using SUPABASE_BANK_SETUP.md, then refresh the app.';
 
+type AppTab = 'REGISTRY' | 'BANK' | 'REVIEW' | 'DRIVE' | 'ADMIN';
+
+const appTabs: AppTab[] = ['REGISTRY', 'BANK', 'REVIEW', 'DRIVE', 'ADMIN'];
+const storedActiveTabKey = 'adk-active-tab';
+
+const getStoredActiveTab = (): AppTab => {
+  if (typeof window === 'undefined') return 'REGISTRY';
+  const storedTab = window.localStorage.getItem(storedActiveTabKey);
+  return appTabs.includes(storedTab as AppTab) ? storedTab as AppTab : 'REGISTRY';
+};
+
 const formatBankTransactionType = (type: BankTransactionType) => {
+  if (type === 'DEPOSIT_FROM_KOREA') return 'DEPOSIT FROM KOREA';
+  if (type === 'FUND_TRANSFER') return 'FUND TRANSFER';
   if (type === 'PAYMENT_TO_BE_MADE') return 'PAYMENT TO BE MADE';
   if (type === 'KOREA_PAYMENT') return 'KOREA PAYMENT';
   return type;
 };
+
+const isIncomingBankTransaction = (type: BankTransactionType) =>
+  type === 'DEPOSIT' || type === 'FUND_TRANSFER' || type === 'DEPOSIT_FROM_KOREA';
 
 const isOutgoingBankTransaction = (type: BankTransactionType) =>
   type === 'PAYMENT_TO_BE_MADE' || type === 'WITHDRAWAL' || type === 'KOREA_PAYMENT';
@@ -143,7 +159,7 @@ export default function App() {
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [activeTab, setActiveTab] = useState<'REGISTRY' | 'BANK' | 'REVIEW' | 'DRIVE' | 'ADMIN'>('REGISTRY');
+  const [activeTab, setActiveTab] = useState<AppTab>(getStoredActiveTab);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([]);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
@@ -419,6 +435,10 @@ export default function App() {
     return () => { supabase.removeChannel(sub); };
   }, [user, userProfile]);
 
+  useEffect(() => {
+    window.localStorage.setItem(storedActiveTabKey, activeTab);
+  }, [activeTab]);
+
   // Enforce tab permissions when user profile loads
   useEffect(() => {
     if (userProfile) {
@@ -426,21 +446,20 @@ export default function App() {
       const isReviewer = userProfile.role === 'REVIEWER';
 
       if (isAdmin) {
-        // Keep existing valid selection or default to REGISTRY
-        if (activeTab !== 'REGISTRY' && activeTab !== 'REVIEW' && activeTab !== 'DRIVE' && activeTab !== 'ADMIN') {
+        if (!['REGISTRY', 'BANK', 'REVIEW', 'DRIVE', 'ADMIN'].includes(activeTab)) {
           setActiveTab('REGISTRY');
         }
       } else if (isReviewer) {
-        // Reviewer can see REVIEW and DRIVE
-        if (activeTab !== 'REVIEW' && activeTab !== 'DRIVE') {
+        if (activeTab !== 'BANK' && activeTab !== 'REVIEW' && activeTab !== 'DRIVE') {
           setActiveTab('REVIEW');
         }
       } else {
-        // Standard USER can only see DRIVE
-        setActiveTab('DRIVE');
+        if (activeTab !== 'DRIVE') {
+          setActiveTab('DRIVE');
+        }
       }
     }
-  }, [userProfile, user]);
+  }, [userProfile, user, activeTab]);
 
   // Sync Check
   useEffect(() => {
@@ -1313,7 +1332,7 @@ export default function App() {
     doc.text(`GENERATED ON: ${dateStr.toUpperCase()} at ${new Date().toLocaleTimeString()}`, 14, 37);
 
     const totalIncoming = filteredBankTransactions
-      .filter(tx => tx.type === 'DEPOSIT')
+      .filter(tx => isIncomingBankTransaction(tx.type))
       .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
     const totalPaymentsToBeMade = filteredBankTransactions
@@ -1407,7 +1426,7 @@ export default function App() {
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 3) {
           const val = String(data.cell.raw);
-          if (val === 'DEPOSIT') {
+          if (val === 'DEPOSIT' || val === 'FUND TRANSFER' || val === 'DEPOSIT FROM KOREA') {
             data.cell.styles.textColor = [16, 185, 129];
           } else if (val === 'PAYMENT TO BE MADE' || val === 'WITHDRAWAL' || val === 'KOREA PAYMENT') {
             data.cell.styles.textColor = [220, 38, 38];
@@ -4013,7 +4032,9 @@ function BankTransactionForm({ initialData, onClose, userId }: BankTransactionFo
             onChange={e => setType(e.target.value as BankTransactionType)}
             className="w-full p-3 border-2 border-black rounded-none focus:outline-none focus:bg-amber-50"
           >
-            {initialData?.type === 'DEPOSIT' && <option value="DEPOSIT">DEPOSIT (+)</option>}
+            <option value="DEPOSIT">DEPOSIT (+)</option>
+            <option value="FUND_TRANSFER">FUND TRANSFER (+)</option>
+            <option value="DEPOSIT_FROM_KOREA">DEPOSIT FROM KOREA (+)</option>
             <option value="PAYMENT_TO_BE_MADE">PAYMENT TO BE MADE (-)</option>
             <option value="WITHDRAWAL">WITHDRAWAL (-)</option>
             <option value="KOREA_PAYMENT">KOREA PAYMENT (-)</option>
@@ -4206,7 +4227,7 @@ function BankRegistryPage({
 
   const totalIncoming = useMemo(() => {
     return filtered
-      .filter(tx => tx.type === 'DEPOSIT')
+      .filter(tx => isIncomingBankTransaction(tx.type))
       .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
   }, [filtered]);
 
@@ -4450,6 +4471,9 @@ function BankRegistryPage({
               className="w-full p-2 border-2 border-black rounded-none focus:outline-none font-bold text-xs"
             >
               <option value="ALL">All Types</option>
+              <option value="DEPOSIT">DEPOSITS (+)</option>
+              <option value="FUND_TRANSFER">FUND TRANSFER (+)</option>
+              <option value="DEPOSIT_FROM_KOREA">DEPOSIT FROM KOREA (+)</option>
               <option value="PAYMENT_TO_BE_MADE">PAYMENTS TO BE MADE (-)</option>
               <option value="WITHDRAWAL">WITHDRAWALS (-)</option>
               <option value="KOREA_PAYMENT">KOREA PAYMENT (-)</option>
@@ -4580,7 +4604,7 @@ function BankRegistryPage({
                   <td className="px-6 py-4">
                     <span className={cn(
                       "px-2 py-0.5 text-[10px] font-black border uppercase tracking-wider",
-                      tx.type === 'DEPOSIT' 
+                      isIncomingBankTransaction(tx.type)
                         ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
                         : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
                     )}>
@@ -4596,8 +4620,8 @@ function BankRegistryPage({
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right font-mono text-base font-black">
-                    <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>
-                      {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                    <span className={isIncomingBankTransaction(tx.type) ? "text-[#10B981]" : "text-[#EF4444]"}>
+                      {(isIncomingBankTransaction(tx.type) ? '+' : '-') + formatCurrency(tx.amount)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -4653,7 +4677,7 @@ function BankRegistryPage({
                 <span className="font-mono text-xs opacity-50">{tx.date}</span>
                 <span className={cn(
                   "px-2 py-0.5 text-[9px] font-black border uppercase tracking-wider",
-                  tx.type === 'DEPOSIT' 
+                  isIncomingBankTransaction(tx.type)
                     ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
                     : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
                 )}>
@@ -4672,9 +4696,9 @@ function BankRegistryPage({
                   <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block">Amount</span>
                   <span className={cn(
                     "font-mono text-lg font-black",
-                    tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"
+                    isIncomingBankTransaction(tx.type) ? "text-[#10B981]" : "text-[#EF4444]"
                   )}>
-                    {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                    {(isIncomingBankTransaction(tx.type) ? '+' : '-') + formatCurrency(tx.amount)}
                   </span>
                 </div>
 
@@ -4778,15 +4802,15 @@ function BankRegistryPage({
                 <td className="p-3 border border-black font-mono">{tx.date}</td>
                 <td className="p-3 border border-black">{tx.bankName}</td>
                 <td className="p-3 border border-black">
-                  <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>{formatBankTransactionType(tx.type)}</span>
+                  <span className={isIncomingBankTransaction(tx.type) ? "text-[#10B981]" : "text-[#EF4444]"}>{formatBankTransactionType(tx.type)}</span>
                 </td>
                 <td className="p-3 border border-black">
                   <div>{tx.particulars}</div>
                   {tx.refNo && <div className="text-[9px] font-mono text-slate-400">REF: {tx.refNo}</div>}
                 </td>
                 <td className="p-3 border border-black text-right font-mono font-black">
-                  <span className={tx.type === 'DEPOSIT' ? "text-[#10B981]" : "text-[#EF4444]"}>
-                    {(tx.type === 'DEPOSIT' ? '+' : '-') + formatCurrency(tx.amount)}
+                  <span className={isIncomingBankTransaction(tx.type) ? "text-[#10B981]" : "text-[#EF4444]"}>
+                    {(isIncomingBankTransaction(tx.type) ? '+' : '-') + formatCurrency(tx.amount)}
                   </span>
                 </td>
                 <td className="p-3 border border-black">

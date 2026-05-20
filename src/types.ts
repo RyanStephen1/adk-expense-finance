@@ -59,7 +59,13 @@ export interface DatabaseErrorInfo {
   authInfo: any;
 }
 
-export type BankTransactionType = 'DEPOSIT' | 'PAYMENT_TO_BE_MADE' | 'WITHDRAWAL' | 'KOREA_PAYMENT';
+export type BankTransactionType =
+  | 'DEPOSIT'
+  | 'FUND_TRANSFER'
+  | 'DEPOSIT_FROM_KOREA'
+  | 'PAYMENT_TO_BE_MADE'
+  | 'WITHDRAWAL'
+  | 'KOREA_PAYMENT';
 export type BankTransactionStatus = 'CLEARED' | 'PENDING' | 'BOUNCED';
 
 export interface BankTransaction {
