@@ -26,6 +26,7 @@ import {
   Edit,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   FileText,
   BarChart3,
   PieChart as PieChartIcon,
@@ -3419,10 +3420,51 @@ function DailyDrivePage({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [driveTab, setDriveTab] = useState<'REPORTS' | 'VOUCHERS'>('REPORTS');
 
+  const [sortField, setSortField] = useState<'name' | 'file_size' | 'uploaded_at' | 'uploaded_by'>('uploaded_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   const currentBucket = driveTab === 'REPORTS' ? 'cash-reports' : 'cash-vouchers';
   const currentTable = driveTab === 'REPORTS' ? 'reports' : 'vouchers';
   const currentFiles = driveTab === 'REPORTS' ? reports : vouchers;
   const currentRefresh = driveTab === 'REPORTS' ? onRefreshReports : onRefreshVouchers;
+
+  const sortedFiles = useMemo(() => {
+    return [...currentFiles].sort((a, b) => {
+      let valA: any = a[sortField];
+      let valB: any = b[sortField];
+
+      if (sortField === 'uploaded_by') {
+        valA = a.uploader?.displayName || '';
+        valB = b.uploader?.displayName || '';
+      }
+
+      if (valA === undefined || valA === null) valA = '';
+      if (valB === undefined || valB === null) valB = '';
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortOrder === 'asc'
+          ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+          : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+      } else {
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      }
+    });
+  }, [currentFiles, sortField, sortOrder]);
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      if (field === 'uploaded_at' || field === 'file_size') {
+        setSortOrder('desc');
+      } else {
+        setSortOrder('asc');
+      }
+    }
+  };
 
   const isAdmin = useMemo(() => {
     return userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com';
@@ -3755,26 +3797,87 @@ function DailyDrivePage({
 
       {/* Reports Grid/Table */}
       <div className="bg-white border-2 border-black brutalist-shadow overflow-hidden">
-        <div className="p-4 md:p-6 border-b-2 border-black flex items-center justify-between">
+        <div className="p-4 md:p-6 border-b-2 border-black flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h3 className="text-xs font-black uppercase tracking-widest flex items-center">
             <span className="w-2 h-2 bg-black mr-2"></span>
             Uploaded {driveTab === 'REPORTS' ? 'Reports' : 'Vouchers'} ({currentFiles.length})
           </h3>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black uppercase tracking-wider opacity-40">Sort By:</span>
+            <select
+              value={`${sortField}-${sortOrder}`}
+              onChange={(e) => {
+                const [field, order] = e.target.value.split('-');
+                setSortField(field as any);
+                setSortOrder(order as any);
+              }}
+              className="bg-[#F1F5F9] border-2 border-black px-3 py-1.5 text-[10px] font-black uppercase tracking-wider focus:ring-2 focus:ring-black outline-none cursor-pointer"
+            >
+              <option value="uploaded_at-desc">Upload Date (Newest)</option>
+              <option value="uploaded_at-asc">Upload Date (Oldest)</option>
+              <option value="name-asc">File Name (A-Z)</option>
+              <option value="name-desc">File Name (Z-A)</option>
+              <option value="file_size-desc">File Size (Largest)</option>
+              <option value="file_size-asc">File Size (Smallest)</option>
+              <option value="uploaded_by-asc">Uploaded By (A-Z)</option>
+              <option value="uploaded_by-desc">Uploaded By (Z-A)</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#F1F5F9] text-[10px] font-black uppercase tracking-widest border-b-2 border-black hidden md:table-header-group">
               <tr>
-                <th className="px-6 py-4">File Name</th>
-                <th className="px-6 py-4">Size</th>
-                <th className="px-6 py-4">Upload Date</th>
-                <th className="px-6 py-4">Uploaded By</th>
+                <th 
+                  className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-1">
+                    File Name
+                    {sortField === 'name' && (
+                      sortOrder === 'asc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('file_size')}
+                >
+                  <div className="flex items-center gap-1">
+                    Size
+                    {sortField === 'file_size' && (
+                      sortOrder === 'asc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('uploaded_at')}
+                >
+                  <div className="flex items-center gap-1">
+                    Upload Date
+                    {sortField === 'uploaded_at' && (
+                      sortOrder === 'asc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('uploaded_by')}
+                >
+                  <div className="flex items-center gap-1">
+                    Uploaded By
+                    {sortField === 'uploaded_by' && (
+                      sortOrder === 'asc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F3F4F6] text-sm font-bold">
-              {currentFiles.map((doc) => (
+              {sortedFiles.map((doc) => (
                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
                   {/* File Name */}
                   <td className="px-6 py-4">
@@ -3838,7 +3941,7 @@ function DailyDrivePage({
                 </tr>
               ))}
               
-              {currentFiles.length === 0 && (
+              {sortedFiles.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-16 text-center text-xs font-black uppercase opacity-20 tracking-widest">
                     No documents uploaded to this folder. Drop a file above to begin!
