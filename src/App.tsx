@@ -694,7 +694,7 @@ export default function App() {
     // Elegant Corporate A4 Header (Soft slate background, thin dark slate top line)
     doc.setFillColor(248, 250, 252); // slate-50 background
     doc.rect(0, 0, 210, 42, 'F');
-    
+
     doc.setFillColor(30, 41, 59); // slate-800 dark navy top border stripe
     doc.rect(0, 0, 210, 3, 'F');
 
@@ -719,7 +719,7 @@ export default function App() {
     // ----------------------------------------------------
     // STANDALONE KPI CARDS (MASSIVE HIGHLIGHTS FOR THE BOSS)
     // ----------------------------------------------------
-    
+
     // Left KPI Card: TODAY'S CASH WITHDRAWAL
     doc.setFillColor(255, 251, 235); // amber/gold light fill (#fffbeb)
     doc.rect(14, 46, 56, 20, 'F');
@@ -794,7 +794,7 @@ export default function App() {
     doc.setTextColor(15, 23, 42); // slate-900
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('STARTING BOOK BALANCE:', 18, 93);
+    doc.text('STARTING BANK BALANCE:', 18, 93);
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(summary.bankBalance), 98, 93, { align: 'right' });
 
@@ -1143,7 +1143,7 @@ export default function App() {
       if (error) throw error;
 
       alert(`Success! Today's financial closing is complete.\nBalances carried forward to tomorrow (${tomorrowDateStr}):\n\n• Starting Bank Balance: ${formatCurrency(netBank)}\n• Starting Cash on Hand: ${formatCurrency(finalNetCash)}`);
-      
+
       setSelectedDate(tomorrow);
     } catch (error) {
       console.error("Failed to carry forward daily balances:", error);
@@ -1297,7 +1297,7 @@ export default function App() {
     // Elegant Corporate A4 Header
     doc.setFillColor(248, 250, 252);
     doc.rect(0, 0, 210, 42, 'F');
-    
+
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, 210, 3, 'F');
 
@@ -1449,7 +1449,7 @@ export default function App() {
     const finalY = (doc as any).lastAutoTable.finalY || 80;
     const pageHeight = doc.internal.pageSize.height;
     let signaturePage = doc.getNumberOfPages();
-    
+
     if (finalY + 40 > pageHeight) {
       doc.addPage();
       signaturePage = doc.getNumberOfPages();
@@ -1463,7 +1463,7 @@ export default function App() {
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.25);
     doc.line(14, sigY + 12, 84, sigY + 12);
-    
+
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
@@ -2201,7 +2201,7 @@ export default function App() {
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* KPI 1: Cash Withdrawal */}
           <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-5 shadow-sm">
-            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-600 mb-1.5">Cash Withdrawal</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-600 mb-1.5">For Cash Withdrawal</div>
             <div className="text-2xl font-mono font-black text-amber-900 leading-none">{formatCurrency(summary.withdrawalAmount)}</div>
           </div>
           {/* KPI 2: Net Bank Balance */}
@@ -2226,7 +2226,7 @@ export default function App() {
             <div className="bg-[#2563EB] text-white p-2.5 text-[10px] font-black uppercase text-center">Bank Book Flow</div>
             <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold uppercase opacity-50">Starting Book Balance:</span>
+                <span className="font-bold uppercase opacity-50">Starting Bank Balance:</span>
                 <span className="font-mono font-bold text-slate-900">{formatCurrency(summary.bankBalance)}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
@@ -2315,6 +2315,13 @@ export default function App() {
             <div className="border-b border-slate-200 mb-2"></div>
             <div className="text-[10px] font-bold uppercase tracking-wide text-slate-800">Ryan Stephen Cascalla</div>
             <div className="text-[7.5px] font-medium uppercase text-slate-400 tracking-wider mt-0.5">Finance / Clerk</div>
+          </div>
+
+          <div className="w-64">
+            <div className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-12">Checked By</div>
+            <div className="border-b border-slate-200 mb-2"></div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-800">Alvin Asi</div>
+            <div className="text-[7.5px] font-medium uppercase text-slate-400 tracking-wider mt-0.5">Operation Support</div>
           </div>
           <div className="w-64">
             <div className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-12">Approved By</div>
@@ -3405,13 +3412,13 @@ interface DailyDrivePageProps {
   onRefreshVouchers: () => void;
 }
 
-function DailyDrivePage({ 
-  reports, 
-  vouchers, 
-  user, 
-  userProfile, 
-  onRefreshReports, 
-  onRefreshVouchers 
+function DailyDrivePage({
+  reports,
+  vouchers,
+  user,
+  userProfile,
+  onRefreshReports,
+  onRefreshVouchers
 }: DailyDrivePageProps) {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -3502,7 +3509,7 @@ function DailyDrivePage({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       await handleFileUpload(e.dataTransfer.files[0]);
     }
@@ -3602,7 +3609,7 @@ function DailyDrivePage({
     // Detect mobile browser to preemptively bypass popup blocker policies
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     let newWindow: Window | null = null;
-    
+
     if (isMobile) {
       newWindow = window.open('about:blank', '_blank');
     }
@@ -3713,7 +3720,7 @@ function DailyDrivePage({
             {driveTab === 'REPORTS' ? 'Reports Drive' : 'Vouchers Drive'}
           </h2>
         </div>
-        
+
         {/* Storage Bar (wow factor) */}
         <div className="bg-white border-2 border-black p-4 brutalist-shadow w-full md:max-w-xs shrink-0">
           <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1.5">
@@ -3724,8 +3731,8 @@ function DailyDrivePage({
             <span>{formatSize(totalSize)} / 1 GB</span>
           </div>
           <div className="w-full h-4 bg-gray-200 border border-black overflow-hidden relative">
-            <div 
-              className="h-full bg-black transition-all duration-500" 
+            <div
+              className="h-full bg-black transition-all duration-500"
               style={{ width: `${storagePercentage}%` }}
             />
             <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono leading-none select-none text-white mix-blend-difference">
@@ -3737,7 +3744,7 @@ function DailyDrivePage({
 
       {/* Upload Box Dropzone (Admins Only) */}
       {isAdmin ? (
-        <div 
+        <div
           onDragEnter={handleDrag}
           onDragOver={handleDrag}
           onDragLeave={handleDrag}
@@ -3748,14 +3755,14 @@ function DailyDrivePage({
             dragActive ? "border-[#2563EB] bg-[#eff6ff]" : "border-black hover:bg-slate-50"
           )}
         >
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            className="hidden" 
+            className="hidden"
             accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.txt"
           />
-          
+
           {uploading ? (
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-black"></div>
@@ -3829,7 +3836,7 @@ function DailyDrivePage({
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#F1F5F9] text-[10px] font-black uppercase tracking-widest border-b-2 border-black hidden md:table-header-group">
               <tr>
-                <th 
+                <th
                   className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
                   onClick={() => handleSort('name')}
                 >
@@ -3840,7 +3847,7 @@ function DailyDrivePage({
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
                   onClick={() => handleSort('file_size')}
                 >
@@ -3851,7 +3858,7 @@ function DailyDrivePage({
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
                   onClick={() => handleSort('uploaded_at')}
                 >
@@ -3862,7 +3869,7 @@ function DailyDrivePage({
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="px-6 py-4 cursor-pointer select-none hover:bg-slate-100 transition-colors"
                   onClick={() => handleSort('uploaded_by')}
                 >
@@ -3940,7 +3947,7 @@ function DailyDrivePage({
                   </td>
                 </tr>
               ))}
-              
+
               {sortedFiles.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-16 text-center text-xs font-black uppercase opacity-20 tracking-widest">
@@ -3981,7 +3988,7 @@ function DailyDrivePage({
                     {previewFile.name}
                   </h3>
                 </div>
-                
+
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => downloadFile(previewFile.filePath, previewFile.name)}
@@ -3990,7 +3997,7 @@ function DailyDrivePage({
                     <Download className="w-3.5 h-3.5" />
                     Download
                   </button>
-                  
+
                   <button
                     onClick={() => setPreviewFile(null)}
                     className="p-1.5 bg-white border-2 border-black hover:bg-black hover:text-white transition-all text-black font-black"
@@ -4708,7 +4715,7 @@ function BankRegistryPage({
                     <span className={cn(
                       "px-2 py-0.5 text-[10px] font-black border uppercase tracking-wider",
                       isIncomingBankTransaction(tx.type)
-                        ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
+                        ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20"
                         : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
                     )}>
                       {formatBankTransactionType(tx.type)}
@@ -4781,7 +4788,7 @@ function BankRegistryPage({
                 <span className={cn(
                   "px-2 py-0.5 text-[9px] font-black border uppercase tracking-wider",
                   isIncomingBankTransaction(tx.type)
-                    ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20" 
+                    ? "bg-[#E6F4EA] text-[#137333] border-[#137333]/20"
                     : "bg-[#FCE8E6] text-[#C5221F] border-[#C5221F]/20"
                 )}>
                   {formatBankTransactionType(tx.type)}
@@ -4843,8 +4850,8 @@ function BankRegistryPage({
         </div>
       </div>
 
-      <div 
-        id="bank-registry-report-view" 
+      <div
+        id="bank-registry-report-view"
         className="fixed -left-[9999px] top-0 w-[1000px] p-10 bg-white border-[10px] border-black space-y-8"
         style={{ position: 'fixed', visibility: 'hidden' }}
       >
