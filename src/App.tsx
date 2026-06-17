@@ -922,7 +922,7 @@ export default function App() {
 
     doc.setDrawColor(148, 163, 184); // slate-400 line
     doc.setLineWidth(0.25);
-    doc.line(14, finalY + 22, 80, finalY + 22); // neat thin signature line
+    doc.line(14, finalY + 22, 68, finalY + 22); // neat thin signature line
 
     doc.setTextColor(15, 23, 42); // slate-900 black
     doc.setFontSize(9.5);
@@ -934,25 +934,45 @@ export default function App() {
     doc.setFont('helvetica', 'normal');
     doc.text('Finance / Clerk', 14, finalY + 32.5);
 
-    // Approved By signature block
+    // Checked By signature block
     doc.setTextColor(115, 125, 135);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('APPROVED BY', 110, finalY);
+    doc.text('CHECKED BY', 78, finalY);
 
     doc.setDrawColor(148, 163, 184); // slate-400 line
     doc.setLineWidth(0.25);
-    doc.line(110, finalY + 22, 180, finalY + 22);
+    doc.line(78, finalY + 22, 132, finalY + 22);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('BOSS SEKON KIM', 110, finalY + 28);
+    doc.text('ALVIN ASI', 78, finalY + 28);
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Managing Director / CEO', 110, finalY + 32.5);
+    doc.text('Operation Support', 78, finalY + 32.5);
+
+    // Approved By signature block
+    doc.setTextColor(115, 125, 135);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('APPROVED BY', 142, finalY);
+
+    doc.setDrawColor(148, 163, 184); // slate-400 line
+    doc.setLineWidth(0.25);
+    doc.line(142, finalY + 22, 196, finalY + 22);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BOSS SEKON KIM', 142, finalY + 28);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Managing Director / CEO', 142, finalY + 32.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -1109,16 +1129,23 @@ export default function App() {
           <div style="height:1px;background:#dce1e6;margin-bottom:30px;"></div>
           <div style="display:flex;justify-content:space-between;">
             <!-- Prepared By -->
-            <div style="width:45%;">
+            <div style="width:30%;">
               <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">PREPARED BY</div>
-              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:90%;"></div>
               <div style="font-size:16px;font-weight:bold;color:#0f172a;">RYAN STEPHEN CASCALLA</div>
               <div style="font-size:13px;color:#64748b;margin-top:4px;">Finance / Clerk</div>
             </div>
+            <!-- Checked By -->
+            <div style="width:30%;">
+              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">CHECKED BY</div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:90%;"></div>
+              <div style="font-size:16px;font-weight:bold;color:#0f172a;">ALVIN ASI</div>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;">Operation Support</div>
+            </div>
             <!-- Approved By -->
-            <div style="width:45%;">
+            <div style="width:30%;">
               <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">APPROVED BY</div>
-              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:90%;"></div>
               <div style="font-size:16px;font-weight:bold;color:#0f172a;">BOSS SEKON KIM</div>
               <div style="font-size:13px;color:#64748b;margin-top:4px;">Managing Director / CEO</div>
             </div>
@@ -1632,17 +1659,32 @@ export default function App() {
     doc.setTextColor(100, 116, 139);
     doc.text('Financial Officer', 14, sigY + 21);
 
+    // Checked By signature block
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.25);
-    doc.line(110, sigY + 12, 180, sigY + 12);
+    doc.line(62, sigY + 12, 132, sigY + 12);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('BOSS SEKON KIM', 110, sigY + 17);
+    doc.text('CHECKED BY', 62, sigY + 17);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('Managing Director / CEO', 110, sigY + 21);
+    doc.text('ALVIN ASI', 62, sigY + 21);
+    doc.text('Operation Support', 62, sigY + 25);
+
+    // Approved By signature block
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.25);
+    doc.line(140, sigY + 12, 196, sigY + 12);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BOSS SEKON KIM', 140, sigY + 17);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Managing Director / CEO', 140, sigY + 21);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
