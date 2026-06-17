@@ -830,26 +830,26 @@ export default function App() {
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text('STARTING CASH ON HAND:', 112, 92);
+    doc.text('A. STARTING CASH ON HAND:', 112, 92);
     doc.setFont('helvetica', 'bold');
     doc.text(formatCurrency(summary.cashOnHand), 192, 92, { align: 'right' });
 
     doc.setFont('helvetica', 'normal');
-    doc.text('ADD: CASH WITHDRAWAL:', 112, 97);
+    doc.text('B. ADD: CASH WITHDRAWAL:', 112, 97);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129);
     doc.text(`+${formatCurrency(summary.withdrawalAmount)}`, 192, 97, { align: 'right' });
 
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
-    doc.text('LESS: TOTAL EXPENSES:', 112, 102);
+    doc.text('C. LESS: TOTAL EXPENSES:', 112, 102);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(220, 38, 38);
     doc.text(`-${formatCurrency(totalPayables)}`, 192, 102, { align: 'right' });
 
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'normal');
-    doc.text('CASH VARIANCE (UNRECORDED):', 112, 107);
+    doc.text('D. CASH VARIANCE (UNRECORDED):', 112, 107);
     const varColor = extraCash >= 0 ? [16, 185, 129] : [220, 38, 38];
     doc.setTextColor(varColor[0], varColor[1], varColor[2]);
     doc.setFont('helvetica', 'bold');
@@ -861,7 +861,7 @@ export default function App() {
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129);
-    doc.text('FINAL PETTY/VAULT CASH:', 112, 118);
+    doc.text('A+D = FINAL PETTY/VAULT CASH:', 112, 118);
     doc.text(formatCurrency(summary.cashOnHand + extraCash), 192, 118, { align: 'right' });
 
     doc.setTextColor(15, 23, 42);
