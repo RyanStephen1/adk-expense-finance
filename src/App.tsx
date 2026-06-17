@@ -963,27 +963,188 @@ export default function App() {
   };
 
   const handleExportPNG = async () => {
-    const element = document.getElementById('registry-report-view');
-    if (!element) return;
+    const dateStr = selectedDate.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
 
-    // Store original styles to restore later
-    const originalStyle = element.style.cssText;
+    // Build expense table rows
+    const tableRows = expenses.map((exp, index) => `
+      <tr style="background:${index % 2 === 0 ? '#ffffff' : '#fafafa'};">
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;text-align:center;font-size:14px;color:#0f172a;">${index + 1}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;font-size:14px;color:#0f172a;">${exp.payee}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;font-size:14px;color:#0f172a;">${exp.cvNo}<br/>${exp.particulars}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;text-align:right;font-size:14px;color:#0f172a;">${formatCurrency(exp.amount)}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;font-size:14px;color:#0f172a;">${exp.remarks || '-'}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px 6px;text-align:center;font-size:14px;color:#0f172a;">${exp.status}</td>
+      </tr>
+    `).join('');
+
+    const varColor = extraCash >= 0 ? '#10b981' : '#dc2626';
+
+    // Build the full A4 report layout as HTML — mirrors the PDF exactly
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:99999;';
+    container.innerHTML = `
+      <div id="png-report-render" style="width:794px;background:#ffffff;font-family:Helvetica,Arial,sans-serif;padding:0;margin:0;">
+        <!-- HEADER -->
+        <div style="background:#f8fafc;padding:0;margin:0;">
+          <div style="height:11px;background:#1e293b;"></div>
+          <div style="padding:20px 32px 16px 32px;">
+            <div style="font-size:42px;font-weight:bold;color:#0f172a;margin:0;line-height:1.1;">ADK CO., LTD</div>
+            <div style="font-size:16px;color:#475569;margin-top:6px;">REGISTRY OF WITHDRAWALS AND EXPENDITURES</div>
+            <div style="font-size:16px;font-weight:bold;color:#1e293b;margin-top:6px;">STATEMENT FOR: ${dateStr.toUpperCase()}</div>
+          </div>
+          <div style="height:1px;background:#e2e8f0;"></div>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div style="display:flex;gap:16px;padding:20px 32px 0 32px;">
+          <!-- Left: CASH WITHDRAWAL -->
+          <div style="flex:1;background:#fffbeb;border:1.5px solid #fde68a;border-radius:0;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:bold;color:#b45309;letter-spacing:0.5px;">TODAY'S CASH WITHDRAWAL</div>
+            <div style="font-size:24px;font-weight:bold;color:#78350f;margin-top:8px;">${formatCurrency(summary.withdrawalAmount)}</div>
+          </div>
+          <!-- Middle: NET BANK BALANCE -->
+          <div style="flex:1;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:0;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:bold;color:#1d4ed8;letter-spacing:0.5px;">NET BANK BALANCE (BOOK)</div>
+            <div style="font-size:24px;font-weight:bold;color:#1e3a8a;margin-top:8px;">${formatCurrency(bankBalanceAfterWithdrawal)}</div>
+          </div>
+          <!-- Right: FINAL PETTY/VAULT CASH -->
+          <div style="flex:1;background:#f0fdfa;border:1.5px solid #a7f3d0;border-radius:0;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:bold;color:#047857;letter-spacing:0.5px;">FINAL PETTY/VAULT CASH</div>
+            <div style="font-size:24px;font-weight:bold;color:#064e3b;margin-top:8px;">${formatCurrency(summary.cashOnHand + extraCash)}</div>
+          </div>
+        </div>
+
+        <!-- DETAILED AUDIT RECONCILIATION LABEL -->
+        <div style="padding:22px 32px 8px 32px;font-size:17px;font-weight:bold;color:#475569;">DETAILED AUDIT RECONCILIATION</div>
+
+        <!-- RECONCILIATION BOXES -->
+        <div style="display:flex;gap:16px;padding:0 32px;">
+          <!-- Left: BANK BOOK FLOW -->
+          <div style="flex:1;border:1px solid #e2e8f0;">
+            <div style="background:#2563eb;padding:8px 14px;">
+              <span style="color:#ffffff;font-size:13px;font-weight:bold;">BANK BOOK FLOW</span>
+            </div>
+            <div style="padding:14px;">
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:8px;">
+                <span>STARTING BANK BALANCE:</span>
+                <span style="font-weight:bold;">${formatCurrency(summary.bankBalance)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:8px;">
+                <span>LESS: CASH WITHDRAWAL:</span>
+                <span style="font-weight:bold;color:#dc2626;">-${formatCurrency(summary.withdrawalAmount)}</span>
+              </div>
+              <div style="height:1px;background:#e2e8f0;margin:10px 0;"></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;color:#2563eb;">
+                <span>NET BANK BALANCE:</span>
+                <span>${formatCurrency(bankBalanceAfterWithdrawal)}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Right: CASH & VAULT AUDIT TRAIL -->
+          <div style="flex:1;border:1px solid #e2e8f0;">
+            <div style="background:#10b981;padding:8px 14px;">
+              <span style="color:#ffffff;font-size:13px;font-weight:bold;">CASH & VAULT AUDIT TRAIL</span>
+            </div>
+            <div style="padding:14px;">
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:6px;">
+                <span>A. STARTING CASH ON HAND:</span>
+                <span style="font-weight:bold;">${formatCurrency(summary.cashOnHand)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:6px;">
+                <span>B. ADD: CASH WITHDRAWAL:</span>
+                <span style="font-weight:bold;color:#10b981;">+${formatCurrency(summary.withdrawalAmount)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:6px;">
+                <span>C. LESS: TOTAL EXPENSES:</span>
+                <span style="font-weight:bold;color:#dc2626;">-${formatCurrency(totalPayables)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;color:#0f172a;margin-bottom:6px;">
+                <span>D. CASH VARIANCE (UNRECORDED):</span>
+                <span style="font-weight:bold;color:${varColor};">${formatCurrency(extraCash)}</span>
+              </div>
+              <div style="height:1px;background:#e2e8f0;margin:10px 0;"></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;color:#10b981;">
+                <span>A+D = FINAL PETTY/VAULT CASH:</span>
+                <span>${formatCurrency(summary.cashOnHand + extraCash)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EXPENSE TABLE -->
+        <div style="padding:20px 32px 0 32px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#1e293b;">
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:center;width:50px;">NO.</th>
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:left;">PAYEE</th>
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:left;">PARTICULARS (CV NO.)</th>
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:right;">AMOUNT</th>
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:left;">REMARKS</th>
+                <th style="border:1px solid #1e293b;padding:8px 6px;color:#ffffff;font-size:14px;font-weight:bold;text-align:center;">STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+            <tfoot>
+              <tr style="background:#f1f5f9;">
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;"></td>
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;"></td>
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;font-size:14px;font-weight:bold;color:#0f172a;">TOTAL EXPENSES:</td>
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;text-align:right;font-size:14px;font-weight:bold;color:#0f172a;">${formatCurrency(totalPayables)}</td>
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;"></td>
+                <td style="border:1px solid #e2e8f0;padding:8px 6px;"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- SIGNATURE BLOCKS -->
+        <div style="padding:40px 32px 0 32px;">
+          <div style="height:1px;background:#dce1e6;margin-bottom:30px;"></div>
+          <div style="display:flex;justify-content:space-between;">
+            <!-- Prepared By -->
+            <div style="width:45%;">
+              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">PREPARED BY</div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
+              <div style="font-size:16px;font-weight:bold;color:#0f172a;">RYAN STEPHEN CASCALLA</div>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;">Finance / Clerk</div>
+            </div>
+            <!-- Approved By -->
+            <div style="width:45%;">
+              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">APPROVED BY</div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
+              <div style="font-size:16px;font-weight:bold;color:#0f172a;">BOSS SEKON KIM</div>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;">Managing Director / CEO</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div style="display:flex;justify-content:space-between;padding:30px 32px 20px 32px;font-size:14px;color:#0f172a;">
+          <span>System Generated on ${new Date().toLocaleString()}</span>
+          <span>Page 1 of 1</span>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(container);
 
     try {
-      // Temporarily make it visible and in viewport for capture
-      // Use fixed and 0,0 to ensure it's in the 'viewable' area for the engine
-      element.style.position = 'fixed';
-      element.style.left = '0';
-      element.style.top = '0';
-      element.style.zIndex = '99999';
-      element.style.visibility = 'visible';
-      element.style.display = 'block';
-      element.style.opacity = '1';
+      // Give browser time to paint the off-screen element
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Give it extra time to paint
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const renderEl = document.getElementById('png-report-render');
+      if (!renderEl) {
+        throw new Error('Failed to create report render element');
+      }
 
-      const dataUrl = await htmlToImage.toPng(element, {
+      const dataUrl = await htmlToImage.toPng(renderEl, {
         cacheBust: true,
         pixelRatio: 2,
         backgroundColor: '#FFFFFF',
@@ -997,8 +1158,7 @@ export default function App() {
       console.error('PNG Export failed', error);
       alert('PNG Export failed. Please try PDF export instead.');
     } finally {
-      // Restore original hidden state
-      element.style.cssText = originalStyle;
+      document.body.removeChild(container);
     }
   };
 
