@@ -918,11 +918,11 @@ export default function App() {
     doc.setTextColor(115, 125, 135);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('PREPARED BY', 14, finalY); // spaced out header
+    doc.text('PREPARED BY', 14, finalY);
 
     doc.setDrawColor(148, 163, 184); // slate-400 line
     doc.setLineWidth(0.25);
-    doc.line(14, finalY + 22, 80, finalY + 22); // neat thin signature line
+    doc.line(14, finalY + 22, 68, finalY + 22);
 
     doc.setTextColor(15, 23, 42); // slate-900 black
     doc.setFontSize(9.5);
@@ -934,25 +934,45 @@ export default function App() {
     doc.setFont('helvetica', 'normal');
     doc.text('Finance / Clerk', 14, finalY + 32.5);
 
-    // Approved By signature block
+    // Checked By signature block
     doc.setTextColor(115, 125, 135);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('APPROVED BY', 110, finalY);
+    doc.text('CHECKED BY', 78, finalY);
 
     doc.setDrawColor(148, 163, 184); // slate-400 line
     doc.setLineWidth(0.25);
-    doc.line(110, finalY + 22, 180, finalY + 22);
+    doc.line(78, finalY + 22, 132, finalY + 22);
 
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('BOSS SEKON KIM', 110, finalY + 28);
+    doc.text('ALVIN ASI', 78, finalY + 28);
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Managing Director / CEO', 110, finalY + 32.5);
+    doc.text('Operation Support', 78, finalY + 32.5);
+
+    // Approved By signature block
+    doc.setTextColor(115, 125, 135);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('APPROVED BY', 142, finalY);
+
+    doc.setDrawColor(148, 163, 184); // slate-400 line
+    doc.setLineWidth(0.25);
+    doc.line(142, finalY + 22, 196, finalY + 22);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BOSS SEKON KIM', 142, finalY + 28);
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Managing Director / CEO', 142, finalY + 32.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
