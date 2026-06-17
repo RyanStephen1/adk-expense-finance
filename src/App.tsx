@@ -2246,26 +2246,26 @@ export default function App() {
             <div className="bg-[#10B981] text-white p-2.5 text-[10px] font-black uppercase text-center">Cash & Vault Audit Trail</div>
             <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold uppercase opacity-50">Starting Cash on Hand:</span>
+                <span className="font-bold uppercase opacity-50">A. Starting Cash on Hand:</span>
                 <span className="font-mono font-bold text-slate-900">{formatCurrency(summary.cashOnHand)}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold uppercase opacity-50">Add: Cash Withdrawal:</span>
+                <span className="font-bold uppercase opacity-50">B. Add: Cash Withdrawal:</span>
                 <span className="font-mono font-bold text-[#10B981]">+{formatCurrency(summary.withdrawalAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold uppercase opacity-50">Less: Total Expenses:</span>
+                <span className="font-bold uppercase opacity-50">C. Less: Total Expenses:</span>
                 <span className="font-mono font-bold text-red-600">-{formatCurrency(totalPayables)}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold uppercase opacity-50">Cash Variance (Unrecorded):</span>
+                <span className="font-bold uppercase opacity-50">D. Cash Variance (Unrecorded):</span>
                 <span className={cn("font-mono font-bold", extraCash >= 0 ? "text-[#10B981]" : "text-[#EF4444]")}>
                   {formatCurrency(extraCash)}
                 </span>
               </div>
               <div className="border-t border-slate-100 my-1"></div>
               <div className="flex justify-between items-center text-emerald-700 font-bold text-[10px]">
-                <span className="uppercase">Final Petty / Vault Cash:</span>
+                <span className="uppercase">(A+D)=Final Petty / Vault Cash:</span>
                 <span className="font-mono">{formatCurrency(summary.cashOnHand + extraCash)}</span>
               </div>
             </div>
