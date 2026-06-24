@@ -149,6 +149,7 @@ export default function App() {
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
   const [summary, setSummary] = useState<CashSummary>({
     withdrawalAmount: 0,
+    withdrawalDate: '',
     bankBalance: 0,
     cashOnHand: 0,
     updatedAt: null as any
@@ -236,7 +237,8 @@ export default function App() {
           id: dateStr,
           bankBalance: recentData.bankBalance,
           cashOnHand: recentData.cashOnHand,
-          withdrawalAmount: 0, // Reset withdrawals for a new day
+          withdrawalAmount: 0,
+          withdrawalDate: '',
           updatedAt: new Date().toISOString()
         });
       } else {
@@ -246,6 +248,7 @@ export default function App() {
           bankBalance: 0,
           cashOnHand: 0,
           withdrawalAmount: 0,
+          withdrawalDate: '',
           updatedAt: new Date().toISOString()
         });
       }
@@ -667,6 +670,7 @@ export default function App() {
       const { error } = await supabase.from('summaries').upsert([{
         id: summaryId,
         withdrawalAmount: summary.withdrawalAmount || 0,
+        withdrawalDate: summary.withdrawalDate,
         bankBalance: nextBalance,
         cashOnHand: summary.cashOnHand || 0,
         updatedAt: nextSummary.updatedAt,
@@ -730,7 +734,10 @@ export default function App() {
     doc.setTextColor(180, 83, 9); // amber-700
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text('TODAY\'S CASH WITHDRAWAL', 17, 51.5);
+    const withdrawalLabel = summary.withdrawalDate
+      ? `WITHDRAWAL: ${summary.withdrawalDate}`
+      : 'TODAY\'S CASH WITHDRAWAL';
+    doc.text(withdrawalLabel, 17, 51.5);
 
     doc.setTextColor(120, 53, 4); // amber-900
     doc.setFontSize(13);
@@ -898,13 +905,14 @@ export default function App() {
       }
     });
 
+    const pageHeight = doc.internal.pageSize.height;
     let finalY = (doc as any).lastAutoTable.finalY + 20;
-    let signaturePage = 1;
 
-    if (finalY > 240) {
+    // Signature block needs ~50mm (divider + gap + 3 lines); ensure no page break
+    const sigSpaceNeeded = 50;
+    if (finalY + sigSpaceNeeded > pageHeight - 10) {
       doc.addPage();
       finalY = 30;
-      signaturePage = 2;
     }
 
     // Subtle executive horizontal divider line above signature columns
@@ -974,6 +982,7 @@ export default function App() {
     doc.setFont('helvetica', 'normal');
     doc.text('Managing Director / CEO', 142, finalY + 32.5);
 
+    const signaturePage = doc.getNumberOfPages();
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.text(`System Generated on ${new Date().toLocaleString()}`, 14, 285);
@@ -1317,6 +1326,7 @@ export default function App() {
           bankBalance: netBank,
           cashOnHand: finalNetCash,
           withdrawalAmount: tomorrowData ? tomorrowData.withdrawalAmount : 0,
+          withdrawalDate: tomorrowData ? tomorrowData.withdrawalDate : '',
           updatedAt: new Date().toISOString()
         }]);
 
@@ -1626,19 +1636,17 @@ export default function App() {
       }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 80;
     const pageHeight = doc.internal.pageSize.height;
-    let signaturePage = doc.getNumberOfPages();
+    let finalY = (doc as any).lastAutoTable.finalY || 80;
 
-    if (finalY + 40 > pageHeight) {
+    // Signature block needs ~35mm; ensure no page break
+    const sigSpaceNeeded = 35;
+    if (finalY + sigSpaceNeeded > pageHeight - 10) {
       doc.addPage();
-      signaturePage = doc.getNumberOfPages();
-      doc.setPage(signaturePage);
-    } else {
-      doc.setPage(signaturePage);
+      finalY = 30;
     }
 
-    const sigY = Math.max(finalY + 12, pageHeight - 48);
+    const sigY = finalY + 12;
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.25);
@@ -1664,6 +1672,7 @@ export default function App() {
     doc.setTextColor(100, 116, 139);
     doc.text('Managing Director / CEO', 110, sigY + 21);
 
+    const signaturePage = doc.getNumberOfPages();
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text(`System Generated on ${new Date().toLocaleString()}`, 14, pageHeight - 8);
@@ -2381,7 +2390,9 @@ export default function App() {
         <div className="grid grid-cols-3 gap-6 mb-8">
           {/* KPI 1: Cash Withdrawal */}
           <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-5 shadow-sm">
-            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-600 mb-1.5">For Cash Withdrawal</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-600 mb-1.5">
+              {summary.withdrawalDate ? `Withdrawal: ${summary.withdrawalDate}` : 'For Cash Withdrawal'}
+            </div>
             <div className="text-2xl font-mono font-black text-amber-900 leading-none">{formatCurrency(summary.withdrawalAmount)}</div>
           </div>
           {/* KPI 2: Net Bank Balance */}
@@ -3069,6 +3080,7 @@ function ExpenseForm({ initialData, onClose, userId }: { initialData?: Expense |
 function SummaryForm({ data, onClose }: { data: CashSummary, onClose: () => void }) {
   const [formData, setFormData] = useState({
     withdrawalAmount: data.withdrawalAmount.toString(),
+    withdrawalDate: data.withdrawalDate || '',
     bankBalance: data.bankBalance.toString(),
     cashOnHand: data.cashOnHand.toString(),
   });
@@ -3079,6 +3091,7 @@ function SummaryForm({ data, onClose }: { data: CashSummary, onClose: () => void
       const { error } = await supabase.from('summaries').upsert([{
         id: data.id,
         withdrawalAmount: parseFloat(formData.withdrawalAmount) || 0,
+        withdrawalDate: formData.withdrawalDate || null,
         bankBalance: parseFloat(formData.bankBalance) || 0,
         cashOnHand: parseFloat(formData.cashOnHand) || 0,
         updatedAt: new Date().toISOString(),
@@ -3107,6 +3120,15 @@ function SummaryForm({ data, onClose }: { data: CashSummary, onClose: () => void
           type="number" step="0.01" required
           value={formData.withdrawalAmount}
           onChange={e => setFormData({ ...formData, withdrawalAmount: e.target.value })}
+          className="bg-[#F1F5F9] border-none p-4 text-xl font-mono font-bold focus:ring-2 ring-black outline-none"
+        />
+      </div>
+      <div className="flex flex-col">
+        <label className="text-[9px] font-bold uppercase tracking-widest opacity-50 mb-1">Withdrawal Date</label>
+        <input
+          type="date"
+          value={formData.withdrawalDate}
+          onChange={e => setFormData({ ...formData, withdrawalDate: e.target.value })}
           className="bg-[#F1F5F9] border-none p-4 text-xl font-mono font-bold focus:ring-2 ring-black outline-none"
         />
       </div>
@@ -3601,6 +3623,7 @@ function DailyDrivePage({
   onRefreshVouchers
 }: DailyDrivePageProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string; filePath: string } | null>(null);
@@ -3690,45 +3713,37 @@ function DailyDrivePage({
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await handleFileUpload(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      await handleMultipleUpload(files);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      await handleFileUpload(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      await handleMultipleUpload(files);
     }
+    e.target.value = '';
   };
 
-  const handleFileUpload = async (file: File) => {
-    if (userProfile?.role !== 'ADMIN' && user?.email?.trim().toLowerCase() !== 'rcascalla1@gmail.com') {
-      alert("Unauthorized: Only administrators are permitted to upload reports or vouchers.");
-      return;
-    }
-
+  const uploadSingleFile = async (file: File): Promise<string | null> => {
     if (file.size > 52428800) {
-      alert("File size exceeds the 50 MB limits. Please optimize your statement before uploading.");
-      return;
+      alert(`"${file.name}" exceeds the 50 MB limit. Skipping.`);
+      return null;
     }
 
-    setUploading(true);
     const fileExt = file.name.split('.').pop();
-    // Use bucket/tab specific naming prefix
     const prefix = driveTab === 'REPORTS' ? 'report' : 'voucher';
-    const filePath = `${prefix}_${Date.now()}.${fileExt}`;
+    const filePath = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
     try {
-      // 1. Upload to Supabase Storage
       const { error: storageError } = await supabase.storage
         .from(currentBucket)
         .upload(filePath, file);
 
-      if (storageError) {
-        throw new Error(`Storage error: ${storageError.message}`);
-      }
+      if (storageError) throw new Error(`Storage error: ${storageError.message}`);
 
-      // 2. Insert metadata into public database table
       const { error: dbError } = await supabase
         .from(currentTable)
         .insert([{
@@ -3739,19 +3754,51 @@ function DailyDrivePage({
         }]);
 
       if (dbError) {
-        // Cleanup storage file if metadata insert fails
         await supabase.storage.from(currentBucket).remove([filePath]);
         throw new Error(`Database error: ${dbError.message}`);
       }
 
-      currentRefresh();
+      return filePath;
     } catch (err: any) {
-      console.error("Upload failed", err);
+      console.error(`Upload failed for "${file.name}"`, err);
       const setupFile = driveTab === 'REPORTS' ? 'SUPABASE_DRIVE_SETUP.md' : 'SUPABASE_VOUCHERS_SETUP.md';
-      alert(err.message || `Upload failed. Make sure you executed the SQL code from ${setupFile} in your dashboard.`);
-    } finally {
-      setUploading(false);
+      alert(`Failed to upload "${file.name}": ${err.message}. Make sure you executed the SQL code from ${setupFile} in your dashboard.`);
+      return null;
     }
+  };
+
+  const handleMultipleUpload = async (files: File[]) => {
+    if (userProfile?.role !== 'ADMIN' && user?.email?.trim().toLowerCase() !== 'rcascalla1@gmail.com') {
+      alert("Unauthorized: Only administrators are permitted to upload reports or vouchers.");
+      return;
+    }
+
+    const validFiles = files.filter(f => f.size <= 52428800);
+    const skippedFiles = files.filter(f => f.size > 52428800);
+    skippedFiles.forEach(f => alert(`"${f.name}" exceeds the 50 MB limit. Skipping.`));
+
+    if (validFiles.length === 0) return;
+
+    setUploading(true);
+    setUploadProgress({ current: 0, total: validFiles.length });
+
+    let successCount = 0;
+    for (let i = 0; i < validFiles.length; i++) {
+      setUploadProgress({ current: i + 1, total: validFiles.length });
+      const result = await uploadSingleFile(validFiles[i]);
+      if (result) successCount++;
+    }
+
+    setUploadProgress(null);
+    setUploading(false);
+
+    if (successCount > 0) {
+      currentRefresh();
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    await handleMultipleUpload([file]);
   };
 
   const triggerPreview = async (filePath: string, name: string) => {
@@ -3941,14 +3988,25 @@ function DailyDrivePage({
             onChange={handleFileChange}
             className="hidden"
             accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.txt"
+            multiple
           />
 
           {uploading ? (
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-black"></div>
               <span className="text-xs font-black uppercase tracking-widest">
-                Uploading {driveTab === 'REPORTS' ? 'Report' : 'Voucher'} to Supabase Storage...
+                {uploadProgress
+                  ? `Uploading ${uploadProgress.current} of ${uploadProgress.total} ${driveTab === 'REPORTS' ? 'Reports' : 'Vouchers'}...`
+                  : `Uploading ${driveTab === 'REPORTS' ? 'Report' : 'Voucher'} to Supabase Storage...`}
               </span>
+              {uploadProgress && uploadProgress.total > 1 && (
+                <div className="w-48 h-2 bg-gray-200 border border-black overflow-hidden">
+                  <div
+                    className="h-full bg-black transition-all duration-300"
+                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -3957,10 +4015,10 @@ function DailyDrivePage({
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-black uppercase tracking-widest">
-                  Drag and drop {driveTab === 'REPORTS' ? 'report' : 'voucher'} here
+                  Drag and drop {driveTab === 'REPORTS' ? 'reports' : 'vouchers'} here
                 </span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
-                  or click to browse files (max 50 MB)
+                  or click to browse files (max 50 MB each)
                 </span>
               </div>
             </>

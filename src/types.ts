@@ -27,6 +27,7 @@ export interface DailyReviewRecord {
 export interface CashSummary {
   id?: string;
   withdrawalAmount: number;
+  withdrawalDate?: string;
   bankBalance: number;
   cashOnHand: number;
   updatedAt: string;
