@@ -1138,14 +1138,21 @@ export default function App() {
           <div style="height:1px;background:#dce1e6;margin-bottom:30px;"></div>
           <div style="display:flex;justify-content:space-between;">
             <!-- Prepared By -->
-            <div style="width:45%;">
+            <div style="width:30%;">
               <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">PREPARED BY</div>
               <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
               <div style="font-size:16px;font-weight:bold;color:#0f172a;">RYAN STEPHEN CASCALLA</div>
               <div style="font-size:13px;color:#64748b;margin-top:4px;">Finance / Clerk</div>
             </div>
+            <!-- Checked By -->
+            <div style="width:30%;">
+              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">CHECKED BY</div>
+              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
+              <div style="font-size:16px;font-weight:bold;color:#0f172a;">ALVIN ASI</div>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;">Operation Support</div>
+            </div>
             <!-- Approved By -->
-            <div style="width:45%;">
+            <div style="width:30%;">
               <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">APPROVED BY</div>
               <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
               <div style="font-size:16px;font-weight:bold;color:#0f172a;">BOSS SEKON KIM</div>
@@ -5181,6 +5188,12 @@ function BankRegistryPage({
             <div className="border-b border-black h-8"></div>
             <p className="text-[10px] font-black uppercase mt-2">Prepared By</p>
             <p className="text-[9px] text-slate-400">Financial Officer</p>
+          </div>
+          <div className="w-1/3 text-center">
+            <div className="border-b border-black h-8"></div>
+            <p className="text-[10px] font-black uppercase mt-2">Checked By</p>
+            <p className="text-[9px] font-black mt-2">ALVIN ASI</p>
+            <p className="text-[9px] text-slate-400">Operation Support</p>
           </div>
           <div className="w-1/3 text-center">
             <div className="border-b border-black h-8"></div>
