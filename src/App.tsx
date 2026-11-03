@@ -1,5 +1,4 @@
 import { drawReportSignatures, ReportSignatures, SignerEditor, signatureImageHtml, useSigners } from './reportSigners';
-import type { Signer } from './reportSigners';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -1748,7 +1747,6 @@ export default function App() {
           </div>
         </div>
       </header>
-      <SignerEditor {...signerSettings} />
 
       <main className="max-w-7xl mx-auto px-4 py-12" id="printable-registry">
         {activeTab === 'REGISTRY' && (userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
@@ -1901,6 +1899,8 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              <SignerEditor {...signerSettings} />
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -2120,7 +2120,7 @@ export default function App() {
           </>
         ) : activeTab === 'BANK' && (userProfile?.role === 'ADMIN' || userProfile?.role === 'REVIEWER' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
           <BankRegistryPage
-            signers={signers}
+            signerSettings={signerSettings}
             transactions={bankTransactions}
             userProfile={userProfile}
             isAdmin={isAdmin}
@@ -4345,7 +4345,7 @@ function BankTransactionForm({ initialData, onClose, userId }: BankTransactionFo
 }
 
 interface BankRegistryPageProps {
-  signers: Signer[];
+  signerSettings: ReturnType<typeof useSigners>;
   transactions: BankTransaction[];
   userProfile: AppUser | null;
   isAdmin: boolean;
@@ -4376,7 +4376,7 @@ interface BankRegistryPageProps {
 }
 
 function BankRegistryPage({
-  signers,
+  signerSettings,
   transactions,
   userProfile,
   isAdmin,
@@ -4642,6 +4642,8 @@ function BankRegistryPage({
             )}
           </div>
         </div>
+
+        <SignerEditor {...signerSettings} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-4 border-t border-slate-100">
           <div className="col-span-1 sm:col-span-2">
@@ -5037,7 +5039,7 @@ function BankRegistryPage({
           </tbody>
         </table>
 
-        <ReportSignatures signers={signers} />
+        <ReportSignatures signers={signerSettings.signers} />
       </div>
     </div>
   );
