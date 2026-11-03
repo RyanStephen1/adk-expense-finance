@@ -1,3 +1,5 @@
+import { drawReportSignatures, ReportSignatures, SignerEditor, signatureImageHtml, useSigners } from './reportSigners';
+import type { Signer } from './reportSigners';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -141,6 +143,8 @@ const isPaymentToBeMadeType = (type: BankTransactionType) =>
 
 
 export default function App() {
+  const signerSettings = useSigners();
+  const { signers } = signerSettings;
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -906,81 +910,7 @@ export default function App() {
     });
 
     const pageHeight = doc.internal.pageSize.height;
-    let finalY = (doc as any).lastAutoTable.finalY + 20;
-
-    // Signature block needs ~50mm (divider + gap + 3 lines); ensure no page break
-    const sigSpaceNeeded = 50;
-    if (finalY + sigSpaceNeeded > pageHeight - 10) {
-      doc.addPage();
-      finalY = 30;
-    }
-
-    // Subtle executive horizontal divider line above signature columns
-    doc.setDrawColor(220, 225, 230);
-    doc.setLineWidth(0.5);
-    doc.line(14, finalY, 196, finalY);
-
-    finalY += 15;
-
-    // Prepared By signature block
-    doc.setTextColor(115, 125, 135);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PREPARED BY', 14, finalY);
-
-    doc.setDrawColor(148, 163, 184); // slate-400 line
-    doc.setLineWidth(0.25);
-    doc.line(14, finalY + 22, 68, finalY + 22);
-
-    doc.setTextColor(15, 23, 42); // slate-900 black
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RYAN STEPHEN CASCALLA', 14, finalY + 28);
-
-    doc.setTextColor(100, 116, 139); // slate-500 muted
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Finance / Clerk', 14, finalY + 32.5);
-
-    // Checked By signature block
-    doc.setTextColor(115, 125, 135);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CHECKED BY', 78, finalY);
-
-    doc.setDrawColor(148, 163, 184); // slate-400 line
-    doc.setLineWidth(0.25);
-    doc.line(78, finalY + 22, 132, finalY + 22);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ALVIN ASI', 78, finalY + 28);
-
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Operation Support', 78, finalY + 32.5);
-
-    // Approved By signature block
-    doc.setTextColor(115, 125, 135);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('APPROVED BY', 142, finalY);
-
-    doc.setDrawColor(148, 163, 184); // slate-400 line
-    doc.setLineWidth(0.25);
-    doc.line(142, finalY + 22, 196, finalY + 22);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('BOSS SEKON KIM', 142, finalY + 28);
-
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Managing Director / CEO', 142, finalY + 32.5);
+    drawReportSignatures(doc, signers, (doc as any).lastAutoTable.finalY + 20);
 
     const signaturePage = doc.getNumberOfPages();
     doc.setFont('helvetica', 'normal');
@@ -1133,33 +1063,7 @@ export default function App() {
           </table>
         </div>
 
-        <!-- SIGNATURE BLOCKS -->
-        <div style="padding:40px 32px 0 32px;">
-          <div style="height:1px;background:#dce1e6;margin-bottom:30px;"></div>
-          <div style="display:flex;justify-content:space-between;">
-            <!-- Prepared By -->
-            <div style="width:30%;">
-              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">PREPARED BY</div>
-              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
-              <div style="font-size:16px;font-weight:bold;color:#0f172a;">RYAN STEPHEN CASCALLA</div>
-              <div style="font-size:13px;color:#64748b;margin-top:4px;">Finance / Clerk</div>
-            </div>
-            <!-- Checked By -->
-            <div style="width:30%;">
-              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">CHECKED BY</div>
-              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
-              <div style="font-size:16px;font-weight:bold;color:#0f172a;">ALVIN ASI</div>
-              <div style="font-size:13px;color:#64748b;margin-top:4px;">Operation Support</div>
-            </div>
-            <!-- Approved By -->
-            <div style="width:30%;">
-              <div style="font-size:14px;font-weight:bold;color:#737d87;margin-bottom:40px;">APPROVED BY</div>
-              <div style="height:1px;background:#94a3b8;margin-bottom:8px;width:80%;"></div>
-              <div style="font-size:16px;font-weight:bold;color:#0f172a;">BOSS SEKON KIM</div>
-              <div style="font-size:13px;color:#64748b;margin-top:4px;">Managing Director / CEO</div>
-            </div>
-          </div>
-        </div>
+        ${signatureImageHtml(signers)}
 
         <!-- FOOTER -->
         <div style="display:flex;justify-content:space-between;padding:30px 32px 20px 32px;font-size:14px;color:#0f172a;">
@@ -1644,40 +1548,7 @@ export default function App() {
     });
 
     const pageHeight = doc.internal.pageSize.height;
-    let finalY = (doc as any).lastAutoTable.finalY || 80;
-
-    // Signature block needs ~35mm; ensure no page break
-    const sigSpaceNeeded = 35;
-    if (finalY + sigSpaceNeeded > pageHeight - 10) {
-      doc.addPage();
-      finalY = 30;
-    }
-
-    const sigY = finalY + 12;
-
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.25);
-    doc.line(14, sigY + 12, 84, sigY + 12);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PREPARED BY', 14, sigY + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Financial Officer', 14, sigY + 21);
-
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.25);
-    doc.line(110, sigY + 12, 180, sigY + 12);
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('BOSS SEKON KIM', 110, sigY + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Managing Director / CEO', 110, sigY + 21);
+    drawReportSignatures(doc, signers, ((doc as any).lastAutoTable.finalY || 80) + 20);
 
     const signaturePage = doc.getNumberOfPages();
     doc.setFont('helvetica', 'normal');
@@ -1877,6 +1748,7 @@ export default function App() {
           </div>
         </div>
       </header>
+      <SignerEditor {...signerSettings} />
 
       <main className="max-w-7xl mx-auto px-4 py-12" id="printable-registry">
         {activeTab === 'REGISTRY' && (userProfile?.role === 'ADMIN' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
@@ -2248,6 +2120,7 @@ export default function App() {
           </>
         ) : activeTab === 'BANK' && (userProfile?.role === 'ADMIN' || userProfile?.role === 'REVIEWER' || user?.email?.trim().toLowerCase() === 'rcascalla1@gmail.com') ? (
           <BankRegistryPage
+            signers={signers}
             transactions={bankTransactions}
             userProfile={userProfile}
             isAdmin={isAdmin}
@@ -2506,28 +2379,7 @@ export default function App() {
           </tfoot>
         </table>
 
-        {/* Signatures */}
-        <div className="border-t border-slate-200 mt-12 pt-8 flex justify-between">
-          <div className="w-64">
-            <div className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-12">Prepared By</div>
-            <div className="border-b border-slate-200 mb-2"></div>
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-800">Ryan Stephen Cascalla</div>
-            <div className="text-[7.5px] font-medium uppercase text-slate-400 tracking-wider mt-0.5">Finance / Clerk</div>
-          </div>
-
-          <div className="w-64">
-            <div className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-12">Checked By</div>
-            <div className="border-b border-slate-200 mb-2"></div>
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-800">Alvin Asi</div>
-            <div className="text-[7.5px] font-medium uppercase text-slate-400 tracking-wider mt-0.5">Operation Support</div>
-          </div>
-          <div className="w-64">
-            <div className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-12">Approved By</div>
-            <div className="border-b border-slate-200 mb-2"></div>
-            <div className="text-[10px] font-black uppercase tracking-wide text-slate-800">Boss Sekon Kim</div>
-            <div className="text-[7.5px] font-medium uppercase text-slate-400 tracking-wider mt-0.5">Managing Director / CEO</div>
-          </div>
-        </div>
+        <ReportSignatures signers={signers} />
 
         <div className="mt-20 pt-4 border-t border-slate-200 text-[8px] font-bold uppercase text-slate-400 flex justify-between">
           <span>System Generated on {new Date().toLocaleString()}</span>
@@ -3721,14 +3573,14 @@ function DailyDrivePage({
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const files = Array.from(e.dataTransfer.files);
+      const files = Array.from<File>(e.dataTransfer.files);
       await handleMultipleUpload(files);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
+      const files = Array.from<File>(e.target.files);
       await handleMultipleUpload(files);
     }
     e.target.value = '';
@@ -4493,6 +4345,7 @@ function BankTransactionForm({ initialData, onClose, userId }: BankTransactionFo
 }
 
 interface BankRegistryPageProps {
+  signers: Signer[];
   transactions: BankTransaction[];
   userProfile: AppUser | null;
   isAdmin: boolean;
@@ -4523,6 +4376,7 @@ interface BankRegistryPageProps {
 }
 
 function BankRegistryPage({
+  signers,
   transactions,
   userProfile,
   isAdmin,
@@ -5183,24 +5037,7 @@ function BankRegistryPage({
           </tbody>
         </table>
 
-        <div className="flex justify-between pt-12">
-          <div className="w-1/3 text-center">
-            <div className="border-b border-black h-8"></div>
-            <p className="text-[10px] font-black uppercase mt-2">Prepared By</p>
-            <p className="text-[9px] text-slate-400">Financial Officer</p>
-          </div>
-          <div className="w-1/3 text-center">
-            <div className="border-b border-black h-8"></div>
-            <p className="text-[10px] font-black uppercase mt-2">Checked By</p>
-            <p className="text-[9px] font-black mt-2">ALVIN ASI</p>
-            <p className="text-[9px] text-slate-400">Operation Support</p>
-          </div>
-          <div className="w-1/3 text-center">
-            <div className="border-b border-black h-8"></div>
-            <p className="text-[10px] font-black uppercase mt-2">BOSS SEKON KIM</p>
-            <p className="text-[9px] text-slate-400">Managing Director / CEO</p>
-          </div>
-        </div>
+        <ReportSignatures signers={signers} />
       </div>
     </div>
   );
